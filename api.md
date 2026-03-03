@@ -1,6 +1,6 @@
 # Brandy API Documentation 🚀
 
-> Welcome, Frontend Developer! This document provides everything you need to integrate with the Brandy Backend.
+> Welcome to the Brandy AI-Based Brand-Influencer Platform API. Use this guide to integrate with the backend seamlessly.
 
 ---
 
@@ -10,167 +10,144 @@
 http://localhost:8000/api/v1
 ```
 
-## 🔐 Authentication
+---
 
-We use **JWT (JSON Web Tokens)**. Tokens are stored in **HttpOnly Cookies** for security, but can also be passed via the `Authorization` header.
+## � Quick Route Reference
 
-### Headers
+### 👤 User & Auth (`/users`)
 
-```json
-{
-  "Content-Type": "application/json",
-  "Authorization": "Bearer <access_token>"
-}
-```
+- `POST /register` - Multi-part registration
+- `POST /login` - Direct login
+- `POST /logout` - Secure logout
+- `POST /refresh-token` - Refresh JWT
+- `GET /profile` - Get current profile
+- `PATCH /update-profile` - Update profile details
+- `POST /forgot-password` - Trigger OTP
+- `POST /reset-password` - Reset with OTP
+- `GET /google` - Google OAuth Init
+- `GET /google/callback` - OAuth Callback
 
-### Cookie Strategy
+### 🏢 Brand Operations (`/brands`)
 
-- `accessToken`: Short-lived (passed automatically with `withCredentials: true`)
-- `refreshToken`: Long-lived (used to get a new `accessToken` when it expires)
+- `GET /dashboard` - Aggregated stats
+- `GET /activities` - Notification feed (Paginated)
+- `POST /campaigns` - Create Campaign
+- `GET /campaigns` - List all (Filtered/Paginated)
+- `GET /campaigns/:campaignId` - Campaign details
+- `PUT /campaigns/:campaignId` - Update details
+- `DELETE /campaigns/:campaignId` - Soft delete
+- `PATCH /campaigns/:campaignId/status` - Change status
+- `GET /influencers` - Discovery/Search (Complex Aggregation)
+- `GET /influencers/:influencerId` - Full Influencer details
+- `POST /collaboration-requests` - Send request
+- `GET /collaboration-requests` - List sent requests
+- `GET /collaboration-requests/:requestId` - Request details
+- `PATCH /collaboration-requests/:requestId/cancel` - Cancel request
 
 ---
 
-## 👤 User & Auth Endpoints (`/users`)
+## 👤 User Profiles & Identity
 
-### 1. Register
+### Registration & Login
 
-`POST /users/register` (Multipart/Form-Data)
+- **Database Stored**: Creates `User` document. Stores `fullname`, `email`, `password` (hashed), `role`, `profilePic` (Cloudinary URL), `coverPic` (Cloudinary URL).
+- **Security**: Sets `accessToken` and `refreshToken` cookies upon success.
 
-| Field      | Type   | Required | Description             |
-| ---------- | ------ | -------- | ----------------------- |
-| fullname   | String | Yes      | User's full name        |
-| email      | String | Yes      | Unique email address    |
-| password   | String | Yes      | Min 6 characters        |
-| role       | String | Yes      | `brand` or `influencer` |
-| profilePic | File   | No       | Profile image           |
-| coverPic   | File   | No       | Cover/Header image      |
+### Profile Management
 
-### 2. Login
-
-`POST /users/login`
-
-**Request Body:**
-
-```json
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
-
-**Success Response (200):** Sets `accessToken` & `refreshToken` cookies.
-
-```json
-{
-  "success": true,
-  "data": {
-    "user": { "_id": "...", "fullname": "...", "role": "brand" },
-    "accessToken": "...",
-    "refreshToken": "..."
-  }
-}
-```
-
-### 3. Profile & Security
-
-- `GET /users/profile`: Get current user info (Requires Auth).
-- `PATCH /users/update-profile`: Update details/images (Multipart).
-- `POST /users/logout`: Clears cookies and sessions.
-- `POST /users/forgot-password`: Send OTP to email.
-- `POST /users/reset-password`: Reset using OTP (`email`, `otp`, `password`).
+- **GET /users/profile**:
+  - **Fetched**: `User` details excluding `password` and `refreshToken`.
+- **PATCH /users/update-profile**:
+  - **Stored**: Updates `fullname`, `email`, `password`, and uploads new images to Cloudinary.
 
 ---
 
-## 🏢 Brand Endpoints (`/brands`)
+## 🔐 Security & Authentication
 
-> [!IMPORTANT]
-> All `/brands` routes require the user to have the `brand` role.
+### JWT Strategy
 
-### 📊 Dashboard & Activity
+- **HttpOnly Cookies**: tokens are stored securely in cookies.
+- **Refresh Flow**: `POST /users/refresh-token` validates the `refreshToken` against the database before issuing new tokens.
 
-- `GET /brands/dashboard`: High-level stats (Total campaigns, requests, etc.)
-- `GET /brands/activities`: Notification/Activity feed (Paginated: `?page=1&limit=10`)
+### Password Recovery
 
-### 📢 Campaign Management
+- **Forgot Password**:
+  - **Logic**: Generates a 6-digit OTP, hashes it, and stores it in the `User` model with an expiry (`passwordResetOTP`, `passwordResetExpires`).
+  - **Action**: Sends email with plain-text OTP.
+- **Reset Password**:
+  - **Logic**: Compares hashed OTP from DB, resets password, and clears reset fields.
 
-- `POST /brands/campaigns`: Create a campaign (**Title, Description, Budget{min,max}, Category[], Platform[]**).
-- `GET /brands/campaigns`: List all brand's campaigns.
-- `GET /brands/campaigns/:campaignId`: Detailed view of one campaign.
-- `PUT /brands/campaigns/:campaignId`: Edit campaign details.
-- `DELETE /brands/campaigns/:campaignId`: Soft delete.
-- `PATCH /brands/campaigns/:campaignId/status`: Update status (`active`, `closed`, `completed`).
+---
+
+## 🏢 Brand Management
+
+### 📊 Brand Dashboard
+
+- **GET /brands/dashboard**
+  - **Stats Fetched**:
+    - `Campaign` aggregation: total, active, completed.
+    - `CollaborationRequest` aggregation: total, accepted, pending, unique influencers contacted.
+    - `Campaign` find: Last 5 recent campaigns.
+
+### 📢 Campaign Logic
+
+- **POST /brands/campaigns**: Creates `Campaign` document linked to `Brand`.
+- **GET /brands/campaigns**: Supports `search` (regex title), `status` filters, and `budget` ranges.
+- **Soft Delete**: `DELETE` routes set `isDeleted: true` instead of removing data.
 
 ### 🔍 Influencer Discovery
 
-- `GET /brands/influencers`: Search and filter influencers.
-  - **Query Params:** `search`, `category`, `platform`, `minPrice`, `maxPrice`, `minFollowers`, `rating`, `location`, `sort`.
-- `GET /brands/influencers/:influencerId`: Full influencer profile and platform stats.
+- **GET /brands/influencers**:
+  - **Logic**: Advanced MongoDB Aggregation.
+  - **Filters**: Category, Platform, Price Range, Followers, Rating, Location.
+  - **Faceted Search**: Returns both data and total count for pagination in a single query.
 
-### 🤝 Collaboration Requests
+---
 
-- `POST /brands/collaboration-requests`: Send request to an influencer.
-  - **Body:** `{ influencerId, campaignId, note, proposedBudget }`
-- `GET /brands/collaboration-requests`: List all sent requests (with filters).
-- `GET /brands/collaboration-requests/:requestId`: Specific request details + Influencer/Campaign info.
-- `PATCH /brands/collaboration-requests/:requestId/cancel`: Cancel a pending request.
+## 🔔 Activity & Notifications
+
+- **POST /brands/activities**: All major actions (creating campaigns, sending requests) trigger an entry in the `Activity` model.
+- **GET /brands/activities**:
+  - **Fetched**: Filtered notifications for the logged-in user.
+  - **Aggregation**: Uses `$facet` to return `data`, `totalCount`, and `unreadCount` simultaneously.
 
 ---
 
 ## ⚠️ Error Handling
 
-All errors follow this structure:
-
-```json
-{
-  "success": false,
-  "statusCode": 400,
-  "message": "Detailed error message here"
-}
-```
-
-| Code | Meaning                                                                |
-| ---- | ---------------------------------------------------------------------- |
-| 400  | Bad Request (Missing fields, validation error)                         |
-| 401  | Unauthorized (Missing/Invalid token)                                   |
-| 403  | Forbidden (Wrong role, e.g., influencer trying to access brand routes) |
-| 404  | Not Found                                                              |
-| 500  | Server Error                                                           |
+| Code | Meaning                          |
+| ---- | -------------------------------- |
+| 400  | Bad Request (Validation failure) |
+| 401  | Unauthorized (Invalid Token)     |
+| 403  | Forbidden (Wrong Role)           |
+| 404  | Not Found                        |
+| 429  | Too Many Requests (OTP attempts) |
+| 500  | Internal Server Error            |
 
 ---
 
-## 🚀 Deployment (Vercel)
+## 🚀 Environment & Deployment
 
-To deploy this backend on Vercel:
+### Environment Variables
 
-1. Ensure `vercel.json` is in your `server/` directory.
-2. In Vercel Project Settings, set the **Root Directory** to `server`.
-3. Add the required Environment Variables listed below.
+- `MONGODB_URI`: Database connection
+- `ACCESS_TOKEN_SECRET`: JWT Access key
+- `REFRESH_TOKEN_SECRET`: JWT Refresh key
+- `CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET`: Image hosting
+- `CORS_ORIGIN`: Your Frontend URL (e.g. `http://localhost:5173`)
 
-### Needed Environment Variables
+### Deployment (Vercel)
 
-| Variable                | Description                                                    |
-| ----------------------- | -------------------------------------------------------------- |
-| `PORT`                  | 8000                                                           |
-| `MONGODB_URI`           | Your MongoDB connection string                                 |
-| `ACCESS_TOKEN_SECRET`   | Long random string                                             |
-| `REFRESH_TOKEN_SECRET`  | Long random string                                             |
-| `CORS_ORIGIN`           | Your Frontend URL (e.g., `https://brandy-frontend.vercel.app`) |
-| `NODE_ENV`              | Set to `production` (Enables secure cookies)                   |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary name                                                |
-| `CLOUDINARY_API_KEY`    | Cloudinary API key                                             |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret                                          |
-| `GOOGLE_CLIENT_ID`      | For Google OAuth                                               |
-| `GOOGLE_CLIENT_SECRET`  | For Google OAuth                                               |
+The backend is optimized for Vercel with a `vercel.json` configuration. Ensure the **Root Directory** is set to `server` in Vercel settings.
 
 ---
 
-## 💡 Frontend Tips
+## 💡 Frontend Integration Tips
 
-1. **Axios Configuration**: Use `withCredentials: true` to ensure cookies are sent.
-2. **SameSite Cookies**: In production, we use `SameSite: None` and `Secure`. Your frontend **must** use HTTPS for authentication to work.
-3. **Role Redirects**: After login, check `data.user.role` to redirect to `/brand/dashboard` or `/influencer/dashboard`.
-4. **Images**: All images are returned as Cloudinary URLs.
-5. **Pagination**: Most list endpoints support `page` and `limit`. The response includes `totalPages` and `totalCount`.
+1.  **WithCredentials**: Always set `axios.defaults.withCredentials = true` for cookie-based auth.
+2.  **Role-Based UI**: Use `user.role` from the login response to handle dashboard routing.
+3.  **Images**: Use the returned Cloudinary URLs directly in `<img>` tags.
+4.  **Pagination**: Use `totalCount` and `totalPages` from the API to build your pagination controls.
 
 ---
 
