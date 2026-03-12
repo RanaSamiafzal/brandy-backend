@@ -1,68 +1,82 @@
-# Brandy - Project Release Documentation 🚀
+# Brandy - Project Context & Release Documentation 🚀
 
-## Project Overview
+> **AI Agent Context**: This document is designed to provide a comprehensive overview of the Brandy platform for both development and AI-assisted engineering.
 
-**Brandy** is a premium brand-influencer collaboration platform. This document tracks the current development progress and system architecture.
+## 🏗 System Architecture & Overview
 
----
+**Brandy** is a premium brand-influencer collaboration platform built with a robust Node.js/Express backend. It follows a modular MVC Richardson maturity model for RESTful APIs.
 
-## ✅ Current Project State
+### Core Entities & Relationships
 
-### Core Systems
-
-- **Auth System**: Fully implemented (JWT, Cookies, Refresh Flow, Password Reset).
-- **Social Auth**: Google OAuth integration is live.
-- **File System**: Cloudinary integration for profile, cover, and campaign images.
-- **Brand Tools**: Full suite of campaign management and dashboard analytics.
-- **Discovery**: Advanced aggregation-based influencer search with multi-dimensional filtering.
-- **Collaborations**: End-to-end request flow (Send -> Track -> Cancel).
-
-### Routes Synchronized
-
-- **Users**: `/api/v1/users/*`
-- **Brands**: `/api/v1/brands/*` (Includes campaigns, discovery, and requests).
+- **User**: Base identity model (influencer or brand). Handles authentication and basic profile data.
+- **Brand**: Profile extension for brand-type users. Owns campaigns.
+- **Influencer**: Profile extension for influencer-type users. Discovered by brands.
+- **Campaign**: Marketing initiatives created by Brands. Contains budget, requirements, and status.
+- **CollaborationRequest**: The bridge between a Brand and an Influencer for a specific Campaign.
+- **Activity**: System-wide event logging for notifications and audit trails.
 
 ---
 
-## 🚧 Partially Implemented / In Progress
+## 🛠 Design Patterns & Conventions
 
-1. **Influencer Dashboard**: Backend model exists; full controller logic and routes are being finalized.
-2. **Brand Profile Settings**: Extended settings (social links, password change) have skeleton controllers but need route mapping.
-3. **Activity Status**: Notifications can be fetched; marking as 'read' or deleting is in progress.
+### 1. Request Handling
 
----
+We use a centralized `AsyncHandler` wrapper for all controller functions to eliminate `try-catch` boilerplate and ensure consistent error propagation.
 
-## ⏳ Not Implemented (Future Scope)
+### 2. Standardized Responses
 
-1. **Real-time Notifications**: Planned via WebSockets/Socket.io.
-2. **Review & Rating**: System to rate influencers after campaign completion.
-3. **Payment Gateway**: Integration for secure budget escrow and payments.
-4. **Admin Panel**: For platform-wide moderation.
+- **Success**: `ApiResponse(statusCode, data, message)`
+- **Errors**: `ApiError(statusCode, message, errors, stack)`
 
----
+### 3. Middleware Stack
 
-## 🛠 Tech Stack
-
-- **Runtime**: Node.js
-- **Framework**: Express.js
-- **Database**: MongoDB (Mongoose ODM)
-- **Auth**: JWT, Passport.js
-- **Storage**: Cloudinary
-- **Mail**: Nodemailer
+- `verifyJwt`: Authentication guard (Cookie & Header support).
+- `roleMiddleware`: Authorization guard (e.g., `roleMiddleware("brand")`).
+- `upload`: Multer-based file processing (Cloudinary integration).
 
 ---
 
-## 📂 Project Structure
+## ✅ Current Implementation State
 
-```text
-server/src/
-├── controllers/      # Business logic
-├── models/           # Mongoose schemas
-├── routes/           # API endpoints
-├── middleware/       # Auth, Roles, File Uploads
-├── config/           # DB, Cloudinary, Passport
-└── utils/            # Shared helpers (ApiError, ApiResponse)
-```
+### Done
+
+- **Authentication**: JWT-based session management, Google OAuth 2.0.
+- **Brand Suite**: Full CRUD for Campaigns, Dashboard Analytics, and Influencer Discovery.
+- **Communication**: Collaboration request lifecycle (Send/Cancel).
+- **Storage**: Automated image optimization via Cloudinary.
+
+### In Progress
+
+- **Influencer Dashboard**: Finalizing controller mappings for performance analytics.
+- **Settings**: Extended profile management (Security, Social Links).
+- **Notifications**: "Mark as read" and "Delete" actions for Activities.
+
+---
+
+## 📂 Project Navigation (server/src/)
+
+- `controllers/`: Business logic layer.
+- `models/`: Mongoose schemas and hooks.
+- `routes/`: Express router definitions.
+- `middleware/`: Auth and utility guards.
+- `config/`: System-wide configurations (DB, Cloudinary).
+- `utils/`: Shared helper classes and constants.
+
+---
+
+## ⚙️ Development Environment
+
+### Scripts
+
+- `npm start`: Production server launch.
+- `npm run dev`: Development server with live reload and dotenv support.
+
+### Key Dependencies
+
+- `express`: Web framework.
+- `mongoose`: MongoDB ODM.
+- `cloudinary`: Image hosting.
+- `passport-google-oauth20`: Social authentication.
 
 ---
 

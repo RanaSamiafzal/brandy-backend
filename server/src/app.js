@@ -7,7 +7,7 @@ const app = express()
 
 // we use cors  for setting that which origin we will accept the req 
 app.use(cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: ["http://localhost:5173", process.env.CORS_ORIGIN],
     credentials: true
 
 }))
@@ -31,14 +31,21 @@ import passport from './config/passport.js'
 app.use(passport.initialize());
 
 // import routes 
-import router from './routes/userRoute.js'
-import brandRouter from './routes/brandRoute.js'
+import authRouter from './routes/authRoutes.js'
+import userRouter from './routes/userRoutes.js'
+import brandRouter from './routes/brandRoutes.js'
+import influencerRouter from './routes/influencerRoutes.js'
+import campaignRouter from './routes/campaignRoutes.js'
+import collaborationRequestRouter from './routes/collaborationRequestRoutes.js'
+import collaborationRouter from './routes/collaborationRoutes.js'
 
+// routes declaration
+app.use('/api/v1/auth', authRouter)
+app.use('/api/v1/users', userRouter)
+app.use('/api/v1/brands', brandRouter)
+app.use('/api/v1/influencers', influencerRouter)
+app.use('/api/v1/campaigns', campaignRouter)
+app.use('/api/v1/collaboration-requests', collaborationRequestRouter)
+app.use('/api/v1/collaborations', collaborationRouter)
 
-// routes declaration creating api
-
-app.use('/api/v1/users',router)
-app.use('/api/v1/brands',brandRouter)
-
-export {app}
-
+export { app }

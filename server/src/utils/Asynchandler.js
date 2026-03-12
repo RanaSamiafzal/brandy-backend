@@ -8,15 +8,15 @@
 
 import { validationStatus } from "./ValidationStatusCode.js"
 
-const AsyncHandler =(fn)=> async(req,res,next)=> {
+const AsyncHandler = (fn) => async (req, res, next) => {
     try {
-        await fn(req,res,next)
+        await fn(req, res, next)
     } catch (error) {
         res.status(validationStatus.internalError).json({
-            success : true,
-            message : error.message
+            success: false,
+            message: error.message
         })
     }
 }
 
-export {AsyncHandler}
+export { AsyncHandler }

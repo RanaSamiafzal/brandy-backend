@@ -1,153 +1,144 @@
 # Brandy API Documentation 🚀
 
-> Welcome to the Brandy AI-Based Brand-Influencer Platform API. Use this guide to integrate with the backend seamlessly.
+> **Version 1.0.0** | Professional Brand-Influencer Integration Guide
 
 ---
 
-## 🌐 Base URL
+## 🌐 Connectivity
 
+- **Base URL**: `http://localhost:8000/api/v1`
+- **Auth Strategy**: Cookie-based JWT (HttpOnly).
+- **CORS**: Requires `withCredentials: true`.
+
+---
+
+## 📦 Standard Response Format
+
+All responses follow this JSON structure:
+
+```json
+{
+  "statusCode": 200,
+  "data": { ... },
+  "message": "Success message",
+  "success": true
+}
 ```
-http://localhost:8000/api/v1
+
+---
+
+## 👤 Authentication & User (`/users`)
+
+### 1. Register User
+
+`POST /register` | Content-Type: `multipart/form-data`
+
+| Field        | Type   | Required | Description                  |
+| ------------ | ------ | -------- | ---------------------------- |
+| `fullname`   | String | Yes      | User's full name             |
+| `email`      | String | Yes      | Unique email                 |
+| `password`   | String | Yes      | Min 6 characters             |
+| `role`       | String | Yes      | `brand` or `influencer`      |
+| `profilePic` | File   | No       | Aspect ratio 1:1 recommended |
+| `coverPic`   | File   | No       | Banner image                 |
+
+### 2. Login
+
+`POST /login` | Content-Type: `application/json`
+
+**Request Body:**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword"
+}
 ```
 
----
+### 3. Profile Management
 
-## � Quick Route Reference
-
-### 👤 User & Auth (`/users`)
-
-- `POST /register` - Multi-part registration
-- `POST /login` - Direct login
-- `POST /logout` - Secure logout
-- `POST /refresh-token` - Refresh JWT
-- `GET /profile` - Get current profile
-- `PATCH /update-profile` - Update profile details
-- `POST /forgot-password` - Trigger OTP
-- `POST /reset-password` - Reset with OTP
-- `GET /google` - Google OAuth Init
-- `GET /google/callback` - OAuth Callback
-
-### 🏢 Brand Operations (`/brands`)
-
-- `GET /dashboard` - Aggregated stats
-- `GET /activities` - Notification feed (Paginated)
-- `POST /campaigns` - Create Campaign
-- `GET /campaigns` - List all (Filtered/Paginated)
-- `GET /campaigns/:campaignId` - Campaign details
-- `PUT /campaigns/:campaignId` - Update details
-- `DELETE /campaigns/:campaignId` - Soft delete
-- `PATCH /campaigns/:campaignId/status` - Change status
-- `GET /influencers` - Discovery/Search (Complex Aggregation)
-- `GET /influencers/:influencerId` - Full Influencer details
-- `POST /collaboration-requests` - Send request
-- `GET /collaboration-requests` - List sent requests
-- `GET /collaboration-requests/:requestId` - Request details
-- `PATCH /collaboration-requests/:requestId/cancel` - Cancel request
+- `GET /profile`: Get current user data.
+- `PATCH /update-profile`: Update details (supports multipart for images).
+- `POST /forgot-password`: Send 6-digit OTP to email.
+- `POST /reset-password`: Reset using `email`, `otp`, and `password`.
 
 ---
 
-## 👤 User Profiles & Identity
+## 🏢 Brand Management (`/brands`)
 
-### Registration & Login
+> **Note**: All routes below require `role: brand`.
 
-- **Database Stored**: Creates `User` document. Stores `fullname`, `email`, `password` (hashed), `role`, `profilePic` (Cloudinary URL), `coverPic` (Cloudinary URL).
-- **Security**: Sets `accessToken` and `refreshToken` cookies upon success.
+### 1. Dashboard Basics
 
-### Profile Management
+`GET /dashboard`
+Returns aggregated stats for active campaigns, pending requests, and recent activity.
 
-- **GET /users/profile**:
-  - **Fetched**: `User` details excluding `password` and `refreshToken`.
-- **PATCH /users/update-profile**:
-  - **Stored**: Updates `fullname`, `email`, `password`, and uploads new images to Cloudinary.
+### 2. Campaign Lifecycle
 
----
+- `POST /campaigns`: Create new campaign.
+- `GET /campaigns`: List with filters (`search`, `status`, `minBudget`, `maxBudget`).
+- `GET /campaigns/:id`: Detailed view including deliverables.
+- `PUT /campaigns/:id`: Update campaign settings.
+- `DELETE /campaigns/:id`: Soft delete.
+- `PATCH /campaigns/:id/status`: Transition between `active`, `closed`, `completed`.
 
-## 🔐 Security & Authentication
+### 3. Influencer Discovery
 
-### JWT Strategy
+`GET /influencers`
+Advanced faceted search for influencers. Supports pagination and multi-dimensional filtering.
 
-- **HttpOnly Cookies**: tokens are stored securely in cookies.
-- **Refresh Flow**: `POST /users/refresh-token` validates the `refreshToken` against the database before issuing new tokens.
+### 4. Collaboration Flows
 
-### Password Recovery
-
-- **Forgot Password**:
-  - **Logic**: Generates a 6-digit OTP, hashes it, and stores it in the `User` model with an expiry (`passwordResetOTP`, `passwordResetExpires`).
-  - **Action**: Sends email with plain-text OTP.
-- **Reset Password**:
-  - **Logic**: Compares hashed OTP from DB, resets password, and clears reset fields.
-
----
-
-## 🏢 Brand Management
-
-### 📊 Brand Dashboard
-
-- **GET /brands/dashboard**
-  - **Stats Fetched**:
-    - `Campaign` aggregation: total, active, completed.
-    - `CollaborationRequest` aggregation: total, accepted, pending, unique influencers contacted.
-    - `Campaign` find: Last 5 recent campaigns.
-
-### 📢 Campaign Logic
-
-- **POST /brands/campaigns**: Creates `Campaign` document linked to `Brand`.
-- **GET /brands/campaigns**: Supports `search` (regex title), `status` filters, and `budget` ranges.
-- **Soft Delete**: `DELETE` routes set `isDeleted: true` instead of removing data.
-
-### 🔍 Influencer Discovery
-
-- **GET /brands/influencers**:
-  - **Logic**: Advanced MongoDB Aggregation.
-  - **Filters**: Category, Platform, Price Range, Followers, Rating, Location.
-  - **Faceted Search**: Returns both data and total count for pagination in a single query.
+- `POST /collaboration-requests`: Send a formal invite to an influencer.
+- `GET /collaboration-requests`: Track all outgoing requests.
+- `PATCH /collaboration-requests/:id/cancel`: Withdraw an active request.
 
 ---
 
 ## 🔔 Activity & Notifications
 
-- **POST /brands/activities**: All major actions (creating campaigns, sending requests) trigger an entry in the `Activity` model.
-- **GET /brands/activities**:
-  - **Fetched**: Filtered notifications for the logged-in user.
-  - **Aggregation**: Uses `$facet` to return `data`, `totalCount`, and `unreadCount` simultaneously.
+`GET /activities`
+Paginated feed of system events. Includes `unreadCount`.
+
+- `PATCH /activities/:id/mark-read`: Mark single notification as read.
+- `DELETE /activities/:id/delete`: Remove from feed.
 
 ---
 
-## ⚠️ Error Handling
+## 🛠 Frontend Integration Snippets
 
-| Code | Meaning                          |
-| ---- | -------------------------------- |
-| 400  | Bad Request (Validation failure) |
-| 401  | Unauthorized (Invalid Token)     |
-| 403  | Forbidden (Wrong Role)           |
-| 404  | Not Found                        |
-| 429  | Too Many Requests (OTP attempts) |
-| 500  | Internal Server Error            |
+### Axios Global Config
 
----
+```javascript
+import axios from "axios";
 
-## 🚀 Environment & Deployment
+const api = axios.create({
+  baseURL: "http://localhost:8000/api/v1",
+  withCredentials: true, // CRITICAL: Enables cookie-based auth
+});
+```
 
-### Environment Variables
+### Handling Multi-part Forms (Registration)
 
-- `MONGODB_URI`: Database connection
-- `ACCESS_TOKEN_SECRET`: JWT Access key
-- `REFRESH_TOKEN_SECRET`: JWT Refresh key
-- `CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET`: Image hosting
-- `CORS_ORIGIN`: Your Frontend URL (e.g. `http://localhost:5173`)
+```javascript
+const formData = new FormData();
+formData.append("fullname", "John Doe");
+formData.append("profilePic", fileInput.files[0]);
 
-### Deployment (Vercel)
-
-The backend is optimized for Vercel with a `vercel.json` configuration. Ensure the **Root Directory** is set to `server` in Vercel settings.
+await api.post("/users/register", formData);
+```
 
 ---
 
-## 💡 Frontend Integration Tips
+## ⚠️ Error Reference
 
-1.  **WithCredentials**: Always set `axios.defaults.withCredentials = true` for cookie-based auth.
-2.  **Role-Based UI**: Use `user.role` from the login response to handle dashboard routing.
-3.  **Images**: Use the returned Cloudinary URLs directly in `<img>` tags.
-4.  **Pagination**: Use `totalCount` and `totalPages` from the API to build your pagination controls.
+| Code    | Label        | Cause                                      |
+| ------- | ------------ | ------------------------------------------ |
+| **400** | Bad Request  | Validation failed or missing fields        |
+| **401** | Unauthorized | Token expired or missing cookies           |
+| **403** | Forbidden    | User role does not match route requirement |
+| **404** | Not Found    | Resource or route does not exist           |
+| **500** | Server Error | Unexpected backend failure                 |
 
 ---
 

@@ -26,12 +26,11 @@ const ActivitySchema = new mongoose.Schema(
         user: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
-            required: true,
-            index: true
+            required: true
         },
         role: {
             type: String,
-            enum: ['"brand', "influencer", "Admin"],
+            enum: ['brand', 'influencer', 'admin'], // fixed typo
             required: true
         },
         type: {
@@ -57,24 +56,32 @@ const ActivitySchema = new mongoose.Schema(
             type: String,
             default: ""
         },
-
         relatedId: {
             type: mongoose.Schema.Types.ObjectId,
             default: null
         },
-
         isRead: {
             type: Boolean,
             default: false
+        },
+        isDeleted: {            // added for soft delete
+            type: Boolean,
+            default: false
+        },
+        deletedAt: {            // track deletion time
+            type: Date,
+            default: null
         }
     },
     {
-        timestamps : true
+        timestamps: true
     }
-)
+);
 
-ActivitySchema.index({user :1 , createdAt : -1});
+// Index to quickly fetch user activities sorted by newest
+ActivitySchema.index({ user: 1, createdAt: -1 });
 
 const Activity = mongoose.model('Activity', ActivitySchema);
 
-export default Activity
+export default Activity;
+

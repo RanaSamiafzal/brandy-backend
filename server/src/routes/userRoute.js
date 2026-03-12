@@ -26,6 +26,10 @@ router.route('/register').post(
         {
             name: "coverPic",
             maxCount: 1
+        },
+        {
+            name: "logo",
+            maxCount: 1
         }
     ]),
     registerUser
@@ -45,6 +49,10 @@ router.route('/update-profile').patch(
         },
         {
             name: "coverPic",
+            maxCount: 1
+        },
+        {
+            name: "logo",
             maxCount: 1
         }
     ]),

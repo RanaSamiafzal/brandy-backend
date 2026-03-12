@@ -5,8 +5,7 @@ const CampaignSchema = new mongoose.Schema({
   brand: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Brand',
-    required: true,
-    index: true
+    required: true
   },
   title: {
     type: String,
@@ -67,6 +66,10 @@ const CampaignSchema = new mongoose.Schema({
   deletedAt: {
     type: Date,
     default: null,
+  },
+  image: {
+    type: String, // Cloudinary URL
+    default: "",
   },
 
 },

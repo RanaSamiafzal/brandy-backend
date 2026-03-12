@@ -14,59 +14,95 @@ import {
     getAllCollaborationRequest,
     getCollaborationRequest,
     cancelCollaborationRequest,
+    acceptCollaborationRequest,
+    rejectCollaborationRequest,
+    getActiveCollaborations,
     getBrandProfile,
     updateBrandProfile,
     changeBrandPassword,
-    updateSocialLinks,
-    getBrandNotification,
     markActivityStatus,
     deleteNotification,
 } from "../controllers/brandController.js";
+
 import { verifyJwt } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
 
+import { upload } from "../middleware/multerMiddleware.js";
+
 const router = Router();
 
-// All routes require authentication
+// ✅ All routes require authentication
 router.use(verifyJwt);
 
-// All brand routes require brand role
+// ✅ All brand routes require brand role
 router.use(roleMiddleware("brand"));
 
-// Dashboard routes
+// ----------------- Dashboard -----------------
 router.route('/dashboard').get(getBrandDashboard);
 
-// Activity/Notification routes
-router.route('/activities').get(getBrandActivity);
+// ----------------- Profile Settings -----------------
+router.route('/profile').get(getBrandProfile).put(
+    upload.fields([
+        {
+            name: "logo",
+            maxCount: 1
+        }
+    ]),
+    updateBrandProfile
+);
+router.route('/profile/password').patch(changeBrandPassword);
+// optional: social links if you implement
+// router.route('/profile/social-links').patch(updateSocialLinks);
 
-// Campaign routes
+// ----------------- Activity & Notifications -----------------
+router.route('/activities').get(getBrandActivity);
+router.route('/activities/:activityId/mark-read').patch(markActivityStatus);
+router.route('/activities/:activityId/delete').delete(deleteNotification);
+
+// ----------------- Campaign Routes -----------------
 router.route('/campaigns')
-    .post(createCampaign)
+    .post(
+        upload.fields([
+            {
+                name: "image",
+                maxCount: 1
+            }
+        ]),
+        createCampaign
+    )
     .get(getAllCampaigns);
 
-// Single campaign routes
 router.route('/campaigns/:campaignId')
     .get(getCampaign)
     .put(updateCampaign)
     .delete(deleteCampaign);
 
-// Campaign status update
 router.route('/campaigns/:campaignId/status')
     .patch(campaignStatus);
 
-// Influencer routes
+// ----------------- Influencer Routes -----------------
 router.route('/influencers').get(getAllInfluencer);
 router.route('/influencers/:influencerId').get(getInfluencer);
 
-// Collaboration Request routes
+// ----------------- Collaboration Requests -----------------
 router.route('/collaboration-requests')
     .post(sendCollaborationRequest)
     .get(getAllCollaborationRequest);
 
-router.route('/collaboration-requests/:requestId').get(getCollaborationRequest);
-router.route('/collaboration-requests/:requestId/cancel').patch(cancelCollaborationRequest);
+router.route('/collaboration-requests/:requestId')
+    .get(getCollaborationRequest);
+
+router.route('/collaboration-requests/:requestId/cancel')
+    .patch(cancelCollaborationRequest);
+
+router.route('/collaboration-requests/:requestId/accept')
+    .patch(acceptCollaborationRequest);
+
+router.route('/collaboration-requests/:requestId/reject')
+    .patch(rejectCollaborationRequest);
+
+// ----------------- Collaboration Hub -----------------
+router.route('/collaborations')
+    .get(getActiveCollaborations);
 
 export default router;
-
-
-
