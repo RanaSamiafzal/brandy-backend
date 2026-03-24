@@ -31,11 +31,18 @@ const deliverableSchema = new Schema(
         },
 
         // Deliverable lifecycle:
-        // pending → submitted → revision_requested → approved → completed
+        // PENDING → IN_PROGRESS → SUBMITTED → APPROVED → REVISION_REQUESTED → DELIVERED
         status: {
             type: String,
-            enum: ["pending", "submitted", "revision_requested", "approved", "completed"],
-            default: "pending",
+            enum: [
+                "PENDING",
+                "IN_PROGRESS",
+                "SUBMITTED",
+                "APPROVED",
+                "REVISION_REQUESTED",
+                "DELIVERED",
+            ],
+            default: "PENDING",
         },
 
         // Files submitted by the influencer (cloudinary URLs or similar)
@@ -107,6 +114,19 @@ const collaborationSchema = new Schema(
             unique: true, // one collaboration per accepted request
         },
 
+        // ── Basic Info ──────────────────────────────
+        title: {
+            type: String,
+            required: [true, "Collaboration title is required"],
+            trim: true,
+        },
+
+        description: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
         // ── Financial Terms ─────────────────────────
         // finalised budget agreed upon at acceptance
         agreedBudget: {
@@ -122,10 +142,24 @@ const collaborationSchema = new Schema(
             trim: true,
         },
 
-        // ── Deliverables ────────────────────────────
+        // ── Deliverables & Progress ──────────────────
         deliverables: {
             type: [deliverableSchema],
             default: [],
+        },
+
+
+
+        // ── Files & Resources ───────────────────────
+        attachments: {
+            type: [String],
+            default: [],
+        },
+
+        notes: {
+            type: String,
+            trim: true,
+            default: "",
         },
 
         // ── Lifecycle ───────────────────────────────

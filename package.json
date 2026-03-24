@@ -1,0 +1,17 @@
+{
+  "name": "brandy",
+  "version": "1.0.0",
+  "description": "Brand-Influencer Integration Platform",
+  "private": true,
+  "workspaces": [
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=server",
+    "start": "npm start --workspace=server",
+    "install-server": "npm install --workspace=server"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

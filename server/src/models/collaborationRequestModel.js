@@ -87,6 +87,11 @@ CollaborationRequestSchema.index(
   }
 );
 
+CollaborationRequestSchema.index({ sender: 1 });
+CollaborationRequestSchema.index({ receiver: 1 });
+CollaborationRequestSchema.index({ status: 1 });
+CollaborationRequestSchema.index({ campaignRelated: 1 });
+
 const CollaborationRequest = mongoose.model(
   "CollaborationRequest",
   CollaborationRequestSchema

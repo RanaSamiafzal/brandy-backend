@@ -3,24 +3,10 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { validationStatus } from "../utils/ValidationStatusCode.js";
 import Collaboration from "../models/collaborationModel.js";
-import Activity from "../models/activityModel.js";
+import { emitActivity } from "../utils/activityUtils.js";
 import mongoose from "mongoose";
 
-// ─────────────────────────────────────────────────────────────
-// Helper: recalculate progress based on approved deliverables
-// ─────────────────────────────────────────────────────────────
-const recalculateProgress = async (collaborationId) => {
-    const collab = await Collaboration.findById(collaborationId);
-    if (!collab || !collab.deliverables.length) return;
 
-    const total = collab.deliverables.length;
-    const approved = collab.deliverables.filter(
-        (d) => d.status === "approved" || d.status === "completed"
-    ).length;
-
-    collab.progress = Math.round((approved / total) * 100);
-    await collab.save();
-};
 
 
 // ─────────────────────────────────────────────────────────────
@@ -58,11 +44,31 @@ const getCollaborations = AsyncHandler(async (req, res) => {
         { $lookup: { from: "campaigns", localField: "campaign", foreignField: "_id", as: "campaign" } },
         { $unwind: { path: "$campaign", preserveNullAndEmptyArrays: true } },
 
-        // remove sensitive fields
+        // map fields for frontend consistency
         {
             $project: {
-                "brand.password": 0, "brand.refreshToken": 0,
-                "influencer.password": 0, "influencer.refreshToken": 0,
+                title: 1,
+                status: 1,
+                startDate: 1,
+                endDate: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                brand: {
+                    id: "$brand._id",
+                    name: "$brand.fullname",
+                    avatar: "$brand.profilePic"
+                },
+                influencer: {
+                    id: "$influencer._id",
+                    name: "$influencer.fullname",
+                    username: "$influencer.username",
+                    avatar: "$influencer.profilePic"
+                },
+                campaign: {
+                    id: "$campaign._id",
+                    title: "$campaign.title",
+                    image: "$campaign.image"
+                }
             }
         },
 
@@ -83,9 +89,9 @@ const getCollaborations = AsyncHandler(async (req, res) => {
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, {
             collaborations,
-            totalCount,
+            total: totalCount,
             page: Number(page),
-            totalPages: Math.ceil(totalCount / limit),
+            pages: Math.ceil(totalCount / limit),
         }, "Collaborations fetched successfully")
     );
 });
@@ -103,52 +109,79 @@ const getCollaborationDetails = AsyncHandler(async (req, res) => {
         throw new ApiError(validationStatus.badRequest, "Invalid collaboration ID");
     }
 
-    const collaborations = await Collaboration.aggregate([
-        {
-            $match: {
-                _id: new mongoose.Types.ObjectId(id),
-                isDeleted: false,
-                $or: [
-                    { brand: new mongoose.Types.ObjectId(userId) },
-                    { influencer: new mongoose.Types.ObjectId(userId) },
-                ],
-            }
-        },
-        { $limit: 1 },
+    const collaboration = await Collaboration.findOne({
+        _id: id,
+        isDeleted: false,
+        $or: [
+            { brand: userId },
+            { influencer: userId }
+        ]
+    })
+        .populate("campaign")
+        .populate("influencer", "fullname username email profilePic")
+        .populate("brand", "fullname username email profilePic")
+        .lean();
 
-        // join brand user
-        { $lookup: { from: "users", localField: "brand", foreignField: "_id", as: "brand" } },
-        { $unwind: "$brand" },
-
-        // join influencer user
-        { $lookup: { from: "users", localField: "influencer", foreignField: "_id", as: "influencer" } },
-        { $unwind: "$influencer" },
-
-        // join campaign details
-        { $lookup: { from: "campaigns", localField: "campaign", foreignField: "_id", as: "campaign" } },
-        { $unwind: { path: "$campaign", preserveNullAndEmptyArrays: true } },
-
-        // join originating request
-        { $lookup: { from: "collaborationrequests", localField: "request", foreignField: "_id", as: "request" } },
-        { $unwind: { path: "$request", preserveNullAndEmptyArrays: true } },
-
-        {
-            $project: {
-                "brand.password": 0, "brand.refreshToken": 0,
-                "influencer.password": 0, "influencer.refreshToken": 0,
-            }
-        },
-    ]);
-
-    if (!collaborations.length) {
+    if (!collaboration) {
         throw new ApiError(validationStatus.notFound, "Collaboration not found");
     }
 
+    // Return a clean response optimized for frontend
     return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, collaborations[0], "Collaboration details fetched successfully")
+        new ApiResponse(
+            validationStatus.ok,
+            {
+                collaboration: {
+                    ...collaboration,
+                    influencer: undefined, // remove to avoid duplication
+                    brand: undefined,      // remove to avoid duplication
+                    campaign: undefined    // remove to avoid duplication
+                },
+                campaign: collaboration.campaign,
+                brand: {
+                    id: collaboration.brand?._id,
+                    name: collaboration.brand?.fullname,
+                    email: collaboration.brand?.email,
+                    avatar: collaboration.brand?.profilePic
+                },
+                influencer: {
+                    id: collaboration.influencer?._id,
+                    name: collaboration.influencer?.fullname,
+                    username: collaboration.influencer?.username,
+                    email: collaboration.influencer?.email,
+                    avatar: collaboration.influencer?.profilePic
+                }
+            },
+            "Collaboration details fetched successfully"
+        )
     );
 });
 
+
+// ─────────────────────────────────────────────────────────────
+// GET /collaborations/:id/deliverables
+// Returns all deliverables for a collaboration
+// ─────────────────────────────────────────────────────────────
+
+const getCollaborationDeliverables = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const collaboration = await Collaboration.findById(id)
+        .select("deliverables").lean();
+
+    if (!collaboration) {
+        return res.status(validationStatus.notFound).json({
+            message: "Collaboration not found",
+        });
+    }
+
+    res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {
+            total: collaboration.deliverables.length,
+            deliverables: collaboration.deliverables,
+        }, "Deliverables fetched successfully")
+    );
+});
 
 // ─────────────────────────────────────────────────────────────
 // PATCH /collaborations/:id/cancel
@@ -180,7 +213,7 @@ const cancelCollaboration = AsyncHandler(async (req, res) => {
 
     // notify the other party
     const notifyUser = isBrand ? collaboration.influencer : collaboration.brand;
-    await Activity.create({
+    await emitActivity({
         user: notifyUser,
         role: isBrand ? "influencer" : "brand",
         type: "collaboration_cancelled",
@@ -219,9 +252,9 @@ const completeCollaboration = AsyncHandler(async (req, res) => {
         throw new ApiError(validationStatus.badRequest, "Cannot complete a cancelled collaboration");
     }
 
-    // all deliverables should be approved before completing
+    // all deliverables should be approved or delivered before completing
     const unapproved = collaboration.deliverables.filter(
-        (d) => !["approved", "completed"].includes(d.status)
+        (d) => !["APPROVED", "DELIVERED"].includes(d.status)
     );
 
     if (unapproved.length > 0) {
@@ -233,11 +266,10 @@ const completeCollaboration = AsyncHandler(async (req, res) => {
 
     collaboration.status = "completed";
     collaboration.completedAt = new Date();
-    collaboration.progress = 100;
     await collaboration.save();
 
     // notify influencer
-    await Activity.create({
+    await emitActivity({
         user: collaboration.influencer,
         role: "influencer",
         type: "collaboration_completed",
@@ -286,10 +318,9 @@ const createDeliverable = AsyncHandler(async (req, res) => {
     }
 
     await collaboration.save();
-    await recalculateProgress(id);
 
     // notify influencer of new task
-    await Activity.create({
+    await emitActivity({
         user: collaboration.influencer,
         role: "influencer",
         type: "deliverable_created",
@@ -320,7 +351,7 @@ const getDeliverables = AsyncHandler(async (req, res) => {
         throw new ApiError(validationStatus.badRequest, "Invalid collaboration ID");
     }
 
-    const collaboration = await Collaboration.findById(id);
+    const collaboration = await Collaboration.findById(id).lean();
     if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
 
     const isBrand = collaboration.brand.toString() === userId.toString();
@@ -332,7 +363,6 @@ const getDeliverables = AsyncHandler(async (req, res) => {
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, {
             deliverables: collaboration.deliverables,
-            progress: collaboration.progress,
         }, "Deliverables fetched successfully")
     );
 });
@@ -359,8 +389,8 @@ const updateDeliverable = AsyncHandler(async (req, res) => {
     if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
 
     // only allow updates on non-approved deliverables
-    if (["approved", "completed"].includes(deliverable.status)) {
-        throw new ApiError(validationStatus.badRequest, "Cannot update an approved deliverable");
+    if (["APPROVED", "DELIVERED"].includes(deliverable.status)) {
+        throw new ApiError(validationStatus.badRequest, "Cannot update an approved or delivered deliverable");
     }
 
     const { title, description, dueDate } = req.body;
@@ -396,13 +426,12 @@ const deleteDeliverable = AsyncHandler(async (req, res) => {
     if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
 
     // prevent deleting a submitted/approved deliverable
-    if (["submitted", "approved", "completed"].includes(deliverable.status)) {
+    if (["SUBMITTED", "APPROVED", "DELIVERED"].includes(deliverable.status)) {
         throw new ApiError(validationStatus.badRequest, "Cannot delete a submitted or approved deliverable");
     }
 
     deliverable.deleteOne();
     await collaboration.save();
-    await recalculateProgress(id);
 
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, {}, "Deliverable deleted successfully")
@@ -430,12 +459,12 @@ const submitDeliverable = AsyncHandler(async (req, res) => {
     const deliverable = collaboration.deliverables.id(deliverableId);
     if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
 
-    if (deliverable.status === "approved") {
-        throw new ApiError(validationStatus.badRequest, "Deliverable is already approved");
+    if (deliverable.status === "APPROVED" || deliverable.status === "DELIVERED") {
+        throw new ApiError(validationStatus.badRequest, "Deliverable is already approved or delivered");
     }
 
     // update deliverable status and submission data
-    deliverable.status = "submitted";
+    deliverable.status = "SUBMITTED";
     deliverable.submissionFiles = submissionFiles;
     deliverable.submittedAt = new Date();
     deliverable.revisionNotes = ""; // clear previous notes on resubmission
@@ -448,7 +477,7 @@ const submitDeliverable = AsyncHandler(async (req, res) => {
     await collaboration.save();
 
     // notify the brand
-    await Activity.create({
+    await emitActivity({
         user: collaboration.brand,
         role: "brand",
         type: "deliverable_submitted",
@@ -482,19 +511,16 @@ const approveDeliverable = AsyncHandler(async (req, res) => {
     const deliverable = collaboration.deliverables.id(deliverableId);
     if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
 
-    if (deliverable.status !== "submitted") {
+    if (deliverable.status !== "SUBMITTED") {
         throw new ApiError(validationStatus.badRequest, "Only submitted deliverables can be approved");
     }
 
-    deliverable.status = "approved";
+    deliverable.status = "APPROVED";
     deliverable.approvedAt = new Date();
     await collaboration.save();
 
-    // recalculate progress — check if all deliverables are done
-    await recalculateProgress(id);
-
     // notify the influencer
-    await Activity.create({
+    await emitActivity({
         user: collaboration.influencer,
         role: "influencer",
         type: "deliverable_approved",
@@ -513,6 +539,7 @@ const approveDeliverable = AsyncHandler(async (req, res) => {
 // PATCH /collaborations/:id/deliverables/:deliverableId/revision
 // Brand requests changes on a submitted deliverable
 // ─────────────────────────────────────────────────────────────
+
 const requestRevision = AsyncHandler(async (req, res) => {
     const { id, deliverableId } = req.params;
     const userId = req.user._id;
@@ -533,11 +560,11 @@ const requestRevision = AsyncHandler(async (req, res) => {
     const deliverable = collaboration.deliverables.id(deliverableId);
     if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
 
-    if (deliverable.status !== "submitted") {
+    if (deliverable.status !== "SUBMITTED") {
         throw new ApiError(validationStatus.badRequest, "Can only request revision on submitted deliverables");
     }
 
-    deliverable.status = "revision_requested";
+    deliverable.status = "REVISION_REQUESTED";
     deliverable.revisionNotes = revisionNotes.trim();
 
     // move collaboration back to in_progress
@@ -548,7 +575,7 @@ const requestRevision = AsyncHandler(async (req, res) => {
     await collaboration.save();
 
     // notify the influencer
-    await Activity.create({
+    await emitActivity({
         user: collaboration.influencer,
         role: "influencer",
         type: "revision_requested",
@@ -563,9 +590,123 @@ const requestRevision = AsyncHandler(async (req, res) => {
 });
 
 
+// ─────────────────────────────────────────────────────────────
+// GET /collaborations/:id/progress
+// Returns progress percentage of deliverables
+// ─────────────────────────────────────────────────────────────
+const getCollaborationProgress = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const collaboration = await Collaboration.findById(id).select("deliverables");
+
+    if (!collaboration) {
+        return res.status(validationStatus.notFound).json(
+            new ApiResponse(validationStatus.notFound, {}, "Collaboration not found")
+        );
+    }
+
+    const totalDeliverables = collaboration.deliverables.length;
+
+    const completedDeliverables = collaboration.deliverables.filter(
+        (d) => d.status === "APPROVED" || d.status === "DELIVERED"
+    ).length;
+
+    const progress =
+        totalDeliverables === 0
+            ? 0
+            : Math.round((completedDeliverables / totalDeliverables) * 100);
+
+    res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {
+            totalDeliverables,
+            completedDeliverables,
+            progressPercentage: progress,
+        }, "Collaboration progress fetched successfully")
+    );
+});
+
+
+// ─────────────────────────────────────────────────────────────
+// GET /collaborations/:id/activity
+// Returns last activity timestamp
+// ─────────────────────────────────────────────────────────────
+
+const getCollaborationActivity = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const collaboration = await Collaboration.findById(id).select(
+        "deliverables updatedAt"
+    );
+
+    if (!collaboration) {
+        return res.status(validationStatus.notFound).json(
+            new ApiResponse(validationStatus.notFound, {}, "Collaboration not found")
+        );
+    }
+
+    let lastActivity = collaboration.updatedAt;
+
+    collaboration.deliverables.forEach((deliverable) => {
+        if (deliverable.submittedAt && deliverable.submittedAt > lastActivity) {
+            lastActivity = deliverable.submittedAt;
+        }
+
+        if (deliverable.approvedAt && deliverable.approvedAt > lastActivity) {
+            lastActivity = deliverable.approvedAt;
+        }
+    });
+
+    res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {
+            lastActivity,
+        }, "Collaboration activity fetched successfully")
+    );
+});
+
+
+// ─────────────────────────────────────────────────────────────
+// GET /collaborations/:id/deliverables/:deliverableId/submission
+// Returns submission details for a specific deliverable
+// ─────────────────────────────────────────────────────────────
+
+const getDeliverableSubmission = AsyncHandler(async (req, res) => {
+    const { id, deliverableId } = req.params;
+
+    const collaboration = await Collaboration.findById(id).select("deliverables");
+
+    if (!collaboration) {
+        return res.status(validationStatus.notFound).json(
+            new ApiResponse(validationStatus.notFound, {}, "Collaboration not found")
+        );
+    }
+
+    const deliverable = collaboration.deliverables.id(deliverableId);
+
+    if (!deliverable) {
+        return res.status(validationStatus.notFound).json(
+            new ApiResponse(validationStatus.notFound, {}, "Deliverable not found")
+        );
+    }
+
+    res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {
+            deliverableId: deliverable._id,
+            title: deliverable.title,
+            status: deliverable.status,
+            submissionFiles: deliverable.submissionFiles,
+            submittedAt: deliverable.submittedAt,
+            revisionNotes: deliverable.revisionNotes,
+            approvedAt: deliverable.approvedAt,
+        }, "Deliverable submission fetched successfully")
+    );
+});
+
+
+
 export {
     getCollaborations,
     getCollaborationDetails,
+    getCollaborationDeliverables,
     cancelCollaboration,
     completeCollaboration,
     createDeliverable,
@@ -575,4 +716,7 @@ export {
     submitDeliverable,
     approveDeliverable,
     requestRevision,
+    getCollaborationProgress,
+    getCollaborationActivity,
+    getDeliverableSubmission,
 };

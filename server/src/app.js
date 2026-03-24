@@ -1,13 +1,22 @@
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser';
+import passport from './config/passport.js'
+import authRouter from './routes/authRoutes.js'
+import userRouter from './routes/userRoutes.js'
+import brandRouter from './routes/brandRoutes.js'
+import influencerRouter from './routes/influencerRoutes.js'
+import campaignRouter from './routes/campaignRoutes.js'
+import collaborationRequestRouter from './routes/collaborationRequestRoutes.js'
+import collaborationRouter from './routes/collaborationRoutes.js'
+import { errorMiddleware } from './middleware/errorMiddleware.js';
 
 
 const app = express()
 
 // we use cors  for setting that which origin we will accept the req 
 app.use(cors({
-    origin: ["http://localhost:5173", process.env.CORS_ORIGIN],
+    origin: ["http://localhost:5173", "http://localhost:3000", process.env.CORS_ORIGIN],
     credentials: true
 
 }))
@@ -27,17 +36,7 @@ app.use(express.static('public'))
 // and set  folder reference of public/temp
 
 app.use(cookieParser())
-import passport from './config/passport.js'
 app.use(passport.initialize());
-
-// import routes 
-import authRouter from './routes/authRoutes.js'
-import userRouter from './routes/userRoutes.js'
-import brandRouter from './routes/brandRoutes.js'
-import influencerRouter from './routes/influencerRoutes.js'
-import campaignRouter from './routes/campaignRoutes.js'
-import collaborationRequestRouter from './routes/collaborationRequestRoutes.js'
-import collaborationRouter from './routes/collaborationRoutes.js'
 
 // routes declaration
 app.use('/api/v1/auth', authRouter)
@@ -47,5 +46,8 @@ app.use('/api/v1/influencers', influencerRouter)
 app.use('/api/v1/campaigns', campaignRouter)
 app.use('/api/v1/collaboration-requests', collaborationRequestRouter)
 app.use('/api/v1/collaborations', collaborationRouter)
+
+// Error handling middleware
+app.use(errorMiddleware);
 
 export { app }

@@ -48,7 +48,8 @@ const BrandSchema = new mongoose.Schema(
     }
 )
 
-// BrandSchema.index({ user: 1 });
+BrandSchema.index({ user: 1 });
+BrandSchema.index({ industry: 1 });
 
 const Brand = mongoose.model("Brand", BrandSchema);
 export default Brand

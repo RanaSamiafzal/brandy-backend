@@ -25,12 +25,7 @@ const getInfluencerDashboard = AsyncHandler(async (req, res) => {
     }
 
     // find influencer profile
-    // [MODIFIED to use aggregation pipeline as requested]
-    const influencers = await Influencer.aggregate([
-        { $match: { user: new mongoose.Types.ObjectId(userId) } },
-        { $limit: 1 }
-    ]);
-    const influencer = influencers[0];
+    const influencer = await Influencer.findOne({ user: userId }).lean();
 
     if (!influencer) {
         throw new ApiError(validationStatus.notFound, "Influencer profile not found");
@@ -113,7 +108,7 @@ const updateInfluencerProfile = AsyncHandler(async (req, res) => {
         { $set: updateFields },
         { new: true }
     );
-    
+
     // [MODIFIED to use aggregation pipeline for safe return]
     const profiles = await Influencer.aggregate([
         { $match: { _id: updatedInfluencer._id } },
@@ -195,11 +190,11 @@ const getAllInfluencer = AsyncHandler(async (req, res) => {
 
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, {
-            influencer,
-            totalCount,
+            influencers: influencer,
+            total: totalCount,
             page: Number(page),
-            totalPages: Math.ceil(totalCount / limit),
-        }, "Influencer fetched successfully")
+            pages: Math.ceil(totalCount / limit),
+        }, "Influencers fetched successfully")
     );
 });
 

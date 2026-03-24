@@ -44,7 +44,16 @@ const ActivitySchema = new mongoose.Schema(
                 "request_rejected",
                 "request_cancelled",
                 "profile_updated",
-                "password_changed"
+                "password_changed",
+                "collaboration_request_sent",
+                "collaboration_accepted",
+                "collaboration_started",
+                "collaboration_cancelled",
+                "collaboration_completed",
+                "deliverable_created",
+                "deliverable_submitted",
+                "deliverable_approved",
+                "revision_requested"
             ],
             required: true
         },

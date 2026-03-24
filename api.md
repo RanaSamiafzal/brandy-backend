@@ -1,6 +1,6 @@
 # Brandy API Documentation 🚀
 
-> **Version 1.0.0** | Professional Brand-Influencer Integration Guide
+> **Version 1.2.0** | Professional Brand-Influencer Integration Guide
 
 ---
 
@@ -14,119 +14,135 @@
 
 ## 📦 Standard Response Format
 
-All responses follow this JSON structure:
-
+### Single Resource / Simple Response
 ```json
 {
-  "statusCode": 200,
-  "data": { ... },
-  "message": "Success message",
-  "success": true
+  "success": true,
+  "message": "Action successful",
+  "data": { ... }
+}
+```
+
+### Paginated List Response
+```json
+{
+  "success": true,
+  "message": "List fetched successfully",
+  "total": 120,
+  "page": 1,
+  "pages": 12,
+  "data": [ ... ]
 }
 ```
 
 ---
 
-## 👤 Authentication & User (`/users`)
+## 🔎 Global Query Parameters (for Lists)
 
-### 1. Register User
-
-`POST /register` | Content-Type: `multipart/form-data`
-
-| Field        | Type   | Required | Description                  |
-| ------------ | ------ | -------- | ---------------------------- |
-| `fullname`   | String | Yes      | User's full name             |
-| `email`      | String | Yes      | Unique email                 |
-| `password`   | String | Yes      | Min 6 characters             |
-| `role`       | String | Yes      | `brand` or `influencer`      |
-| `profilePic` | File   | No       | Aspect ratio 1:1 recommended |
-| `coverPic`   | File   | No       | Banner image                 |
-
-### 2. Login
-
-`POST /login` | Content-Type: `application/json`
-
-**Request Body:**
-
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword"
-}
-```
-
-### 3. Profile Management
-
-- `GET /profile`: Get current user data.
-- `PATCH /update-profile`: Update details (supports multipart for images).
-- `POST /forgot-password`: Send 6-digit OTP to email.
-- `POST /reset-password`: Reset using `email`, `otp`, and `password`.
+| Parameter | Type   | Default | Description             |
+| ---------| ------ | ------- | ----------------------- |
+| `page`    | Number | `1`     | Current page to fetch   |
+| `limit`   | Number | `10`    | Items per page          |
+| `search`  | String | -       | Keyword search filter   |
+| `status`  | String | -       | Categorical filter      |
 
 ---
 
-## 🏢 Brand Management (`/brands`)
+## 🔐 Authentication (`/auth`)
 
-> **Note**: All routes below require `role: brand`.
-
-### 1. Dashboard Basics
-
-`GET /dashboard`
-Returns aggregated stats for active campaigns, pending requests, and recent activity.
-
-### 2. Campaign Lifecycle
-
-- `POST /campaigns`: Create new campaign.
-- `GET /campaigns`: List with filters (`search`, `status`, `minBudget`, `maxBudget`).
-- `GET /campaigns/:id`: Detailed view including deliverables.
-- `PUT /campaigns/:id`: Update campaign settings.
-- `DELETE /campaigns/:id`: Soft delete.
-- `PATCH /campaigns/:id/status`: Transition between `active`, `closed`, `completed`.
-
-### 3. Influencer Discovery
-
-`GET /influencers`
-Advanced faceted search for influencers. Supports pagination and multi-dimensional filtering.
-
-### 4. Collaboration Flows
-
-- `POST /collaboration-requests`: Send a formal invite to an influencer.
-- `GET /collaboration-requests`: Track all outgoing requests.
-- `PATCH /collaboration-requests/:id/cancel`: Withdraw an active request.
+| Endpoint            | Method    | Description                                      |
+| ------------------- | --------- | ------------------------------------------------ |
+| `/register`         | `POST`    | Register as Brand/Influencer (Multipart)         |
+| `/login`            | `POST`    | Login to account                                 |
+| `/logout`           | `POST`    | Logout and clear cookies                         |
+| `/refresh-token`    | `POST`    | Refresh access and refresh tokens                |
+| `/profile`          | `GET`     | Get my authenticated profile data                |
+| `/forgot-password`  | `POST`    | Send 6-digit OTP to email                        |
+| `/reset-password`   | `POST`    | Reset password using OTP                         |
+| `/google`           | `GET`     | Initiate Google OAuth flow                       |
+| `/google/callback`  | `GET`     | Google OAuth callback                            |
 
 ---
 
-## 🔔 Activity & Notifications
+## 👤 User Management (`/users`)
 
-`GET /activities`
-Paginated feed of system events. Includes `unreadCount`.
-
-- `PATCH /activities/:id/mark-read`: Mark single notification as read.
-- `DELETE /activities/:id/delete`: Remove from feed.
+| Endpoint            | Method    | Description                                      |
+| ------------------- | --------- | ------------------------------------------------ |
+| `/profile`          | `PATCH`    | Update profile (Multipart: profilePic, coverPic, logo) |
+| `/delete-account`   | `DELETE`   | Permanently delete account                       |
 
 ---
 
-## 🛠 Frontend Integration Snippets
+## 🏢 Brand Suite (`/brands`)
 
-### Axios Global Config
+| Endpoint                     | Method    | Description                                      |
+| --------------------------- | --------- | ------------------------------------------------ |
+| `/dashboard`                | `GET`     | Brand specific performance stats                 |
+| `/profile`                  | `GET`     | Get brand profile details                        |
+| `/profile`                  | `PATCH`   | Update brand metadata & logo                     |
+| `/change-password`          | `POST`    | Securely change current password                 |
+| `/activity`                 | `GET`     | Paginated list of brand activities               |
+| `/activity/:id/read`        | `PATCH`   | Mark notification as read                        |
+| `/activity/:id`             | `DELETE`  | Remove activity from feed                        |
+| `/influencers`              | `GET`     | Discover & search influencers                    |
+| `/influencers/:id`          | `GET`     | View influencer profile (Brand view)             |
 
-```javascript
-import axios from "axios";
+---
 
-const api = axios.create({
-  baseURL: "http://localhost:8000/api/v1",
-  withCredentials: true, // CRITICAL: Enables cookie-based auth
-});
-```
+## 🎨 Influencer Suite (`/influencers`)
 
-### Handling Multi-part Forms (Registration)
+| Endpoint            | Method    | Description                                      |
+| ------------------- | --------- | ------------------------------------------------ |
+| `/dashboard`        | `GET`     | Influencer analytics & earnings                  |
+| `/profile`          | `GET`     | Get influencer specific details                  |
+| `/profile`          | `PATCH`   | Update bio, niche, and socials                   |
 
-```javascript
-const formData = new FormData();
-formData.append("fullname", "John Doe");
-formData.append("profilePic", fileInput.files[0]);
+---
 
-await api.post("/users/register", formData);
-```
+## 📢 Campaigns (`/campaigns`)
+
+| Endpoint            | Method    | Description                                      |
+| ------------------- | --------- | ------------------------------------------------ |
+| `/`                 | `GET`     | List all campaigns (with filters)                |
+| `/`                 | `POST`    | Create new campaign (Brand only)                 |
+| `/:id`              | `GET`     | Full campaign brief & requirements               |
+| `/:id`              | `PATCH`   | Update campaign settings                         |
+| `/:id`              | `DELETE`  | Close/Delete campaign                            |
+
+---
+
+## 🤝 Collaboration Lifecycle
+
+### Requests (`/collaboration-requests`)
+- `POST /`: Send collaboration invite to influencer.
+- `GET /`: List all incoming/outgoing requests.
+- `GET /:id`: View request details.
+- `PATCH /:id/accept`: Influencer accepts request.
+- `PATCH /:id/reject`: Influencer rejects request.
+- `PATCH /:id/cancel`: Brand withdraws request.
+
+### Active Collaborations (`/collaborations`)
+- `GET /`: List active collaborations.
+- `GET /:id`: Full workspace details.
+- `PATCH /:id/cancel`: Terminate collaboration.
+- `PATCH /:id/complete`: Brand closes collaboration.
+- `GET /:id/progress`: Completion percentage stats.
+
+---
+
+## ✅ Deliverables & Submissions
+
+_All endpoints prefixed with `/collaborations/:id`_
+
+| Endpoint                                 | Method    | Role         |
+| --------------------------------------- | --------- | ------------ |
+| `/deliverables`                         | `GET`     | Both         |
+| `/deliverables`                         | `POST`    | Brand        |
+| `/deliverables/:deliverableId`          | `PATCH`   | Influencer   |
+| `/deliverables/:deliverableId`          | `DELETE`  | Brand        |
+| `/deliverables/:deliverableId/submit`   | `POST`    | Influencer   |
+| `/deliverables/:deliverableId/approve`  | `PATCH`   | Brand        |
+| `/deliverables/:deliverableId/revision` | `PATCH`   | Brand        |
 
 ---
 

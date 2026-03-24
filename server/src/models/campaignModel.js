@@ -80,6 +80,7 @@ const CampaignSchema = new mongoose.Schema({
 
 CampaignSchema.index({ brand: 1, createdAt: -1 });
 CampaignSchema.index({ status: 1 });
+CampaignSchema.index({ createdAt: -1 })
 
 const Campaign = mongoose.model("Campaign", CampaignSchema);
 export default Campaign;

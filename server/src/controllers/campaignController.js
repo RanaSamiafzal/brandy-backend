@@ -4,7 +4,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { validationStatus } from "../utils/ValidationStatusCode.js";
 import Campaign from "../models/campaignModel.js";
 import Brand from "../models/brandModel.js";
-import Activity from "../models/activityModel.js";
+import { emitActivity } from "../utils/activityUtils.js";
 import mongoose from "mongoose";
 import { uploadOnCloudinary } from "../config/cloudinary.js";
 
@@ -60,7 +60,7 @@ const createCampaign = AsyncHandler(async (req, res) => {
     }
 
     // create brand activity
-    await Activity.create({
+    await emitActivity({
         user: userId,
         role: "brand",
         type: "campaign_created",
@@ -79,27 +79,55 @@ const createCampaign = AsyncHandler(async (req, res) => {
 
 const getAllCampaigns = AsyncHandler(async (req, res) => {
     const userId = req.user?._id;
+    const { page = 1, limit = 10, status, search } = req.query;
 
-    // find brand
-    const brand = await Brand.findOne({ user: userId });
+    const skip = (page - 1) * limit;
+
+    // find brand profile for the user
+    // using lean() for better performance as it's a read-only check
+    const brand = await Brand.findOne({ user: userId }).select("_id").lean();
     if (!brand) {
         throw new ApiError(validationStatus.notFound, "Brand not found");
     }
 
-    // filter by brand from campaigns
-    // [MODIFIED to use aggregation pipeline as requested]
-    const campaigns = await Campaign.aggregate([
+    const matchStage = {
+        brand: brand._id,
+        isDeleted: false,
+    };
+
+    if (status) matchStage.status = status;
+    if (search) matchStage.title = { $regex: search, $options: "i" };
+
+    const result = await Campaign.aggregate([
+        { $match: matchStage },
+        { $sort: { createdAt: -1 } },
         {
-            $match: {
-                brand: brand._id,
-                isDeleted: false,
+            $facet: {
+                data: [
+                    { $skip: skip },
+                    { $limit: Number(limit) }
+                ],
+                totalCount: [
+                    { $count: "count" }
+                ]
             }
-        },
-        { $sort: { createdAt: -1 } }
+        }
     ]);
 
+    const campaigns = result[0].data || [];
+    const totalCount = result[0].totalCount[0]?.count || 0;
+
     return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, campaigns, "Campaigns fetched successfully")
+        new ApiResponse(
+            validationStatus.ok,
+            {
+                campaigns,
+                total: totalCount,
+                page: Number(page),
+                pages: Math.ceil(totalCount / limit)
+            },
+            "Campaigns fetched successfully"
+        )
     );
 });
 
@@ -111,17 +139,8 @@ const getCampaign = AsyncHandler(async (req, res) => {
         throw new ApiError(validationStatus.badRequest, "Invalid campaignId");
     }
 
-    // [MODIFIED to use aggregation pipeline as requested]
-    const campaigns = await Campaign.aggregate([
-        {
-            $match: {
-                _id: new mongoose.Types.ObjectId(campaignId),
-                isDeleted: false,
-            }
-        },
-        { $limit: 1 }
-    ]);
-    const campaign = campaigns[0];
+    // [REFACTORED to use findById for better readability]
+    const campaign = await Campaign.findOne({ _id: campaignId, isDeleted: false }).lean();
 
     if (!campaign) {
         throw new ApiError(validationStatus.notFound, "Campaign not found");
@@ -159,6 +178,16 @@ const updateCampaign = AsyncHandler(async (req, res) => {
         throw new ApiError(validationStatus.notFound, "Campaign not found");
     }
 
+    // activity log for campaign update
+    await emitActivity({
+        user: req.user._id,
+        role: "brand",
+        type: "campaign_updated",
+        title: "Campaign Updated",
+        description: `You updated the campaign: ${updatedCampaign.title}`,
+        relatedId: updatedCampaign._id,
+    });
+
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, updatedCampaign, "Campaign updated successfully")
     );
@@ -182,6 +211,16 @@ const deleteCampaign = AsyncHandler(async (req, res) => {
     if (!campaign) {
         throw new ApiError(validationStatus.notFound, "Campaign not found");
     }
+
+    // activity log for campaign deletion
+    await emitActivity({
+        user: req.user._id,
+        role: "brand",
+        type: "campaign_deleted",
+        title: "Campaign Deleted",
+        description: `You deleted the campaign: ${campaign.title}`,
+        relatedId: campaign._id,
+    });
 
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, {}, "Campaign deleted successfully")

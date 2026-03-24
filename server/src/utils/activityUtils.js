@@ -1,0 +1,35 @@
+import Activity from "../models/activityModel.js"
+
+/**
+ * Creates an activity log entry.
+ * This can be extended later to include real-time notifications (e.g. Socket.io, Push, Email).
+ * 
+ * @param {Object} params
+ * @param {string} params.user - The user ID receiving the activity
+ * @param {string} params.role - The role of the user (brand/influencer/admin)
+ * @param {string} params.type - The type of activity (from activityModel enum)
+ * @param {string} params.title - Title of the notification/activity
+ * @param {string} params.description - Detailed description
+ * @param {string} [params.relatedId] - Optional related record ID (campaign, collab, etc.)
+ */
+const emitActivity = async ({ user, role, type, title, description, relatedId = null }) => {
+    try {
+        await Activity.create({
+            user,
+            role,
+            type,
+            title,
+            description,
+            relatedId
+        });
+        
+        // FUTURE: Socket.io emission would go here
+        // io.to(user.toString()).emit("notification", { title, description, type, relatedId });
+
+    } catch (error) {
+        console.error("Error creating activity:", error);
+        // We don't throw here to avoid breaking the main request flow if activity logging fails
+    }
+}
+
+export { emitActivity }

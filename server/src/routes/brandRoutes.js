@@ -6,10 +6,12 @@ import {
     changeBrandPassword,
     getBrandActivity,
     markActivityStatus,
-    deleteNotification,
-    getAllInfluencer,
-    getInfluencerDetail
+    deleteNotification
 } from "../controllers/brandController.js";
+import {
+    getAllInfluencer,
+    getInfluencer as getInfluencerDetail
+} from "../controllers/influencerController.js";
 import { verifyJwt } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
 import { upload } from "../middleware/multerMiddleware.js";

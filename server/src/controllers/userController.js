@@ -5,16 +5,14 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { validationStatus } from "./../utils/ValidationStatusCode.js";
 import { AsyncHandler } from '../utils/Asynchandler.js'
+import { emitActivity } from "../utils/activityUtils.js";
 import bcrypt from 'bcryptjs'
 
 const updateProfile = AsyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
-  // [MODIFIED to use aggregation pipeline as requested]
-  const users = await User.aggregate([
-    { $match: { _id: userId } }
-  ]);
-  const user = users[0];
+  // [REFACTORED to use findById for better readability]
+  const user = await User.findById(userId);
 
   if (!user) {
     throw new ApiError(validationStatus.unauthorized, "user not found")
@@ -51,14 +49,17 @@ const updateProfile = AsyncHandler(async (req, res) => {
   // save updated user
   const updatedUser = await userInstance.save();
 
-  // Prepare safe response (remove sensitive fields)
-  // [MODIFIED to use aggregation pipeline for safe projection as requested]
-  const safeUsers = await User.aggregate([
-    { $match: { _id: updatedUser._id } },
-    { $project: { password: 0, refreshToken: 0 } }
-  ]);
+  // activity log for profile update
+  await emitActivity({
+    user: userId,
+    role: req.user.role,
+    type: "profile_updated",
+    title: "Profile Updated",
+    description: "You successfully updated your profile information.",
+  });
 
-  const safeUser = safeUsers[0];
+  // Prepare safe response (remove sensitive fields)
+  const safeUser = await User.findById(updatedUser._id).select("-password -refreshToken");
 
   res.status(validationStatus.ok).json({
     success: true,

@@ -13,7 +13,8 @@ router.use(verifyJwt);
 router.route('/profile').patch(
     upload.fields([
         { name: "profilePic", maxCount: 1 },
-        { name: "coverPic", maxCount: 1 }
+        { name: "coverPic", maxCount: 1 },
+        { name: "logo", maxCount: 1 }
     ]),
     updateProfile
 );

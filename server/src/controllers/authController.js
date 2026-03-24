@@ -12,13 +12,9 @@ import crypto from 'crypto'
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
-    const users = await User.aggregate([
-      { $match: { _id: new mongoose.Types.ObjectId(userId) } }
-    ]);
-    const user = users[0];
-    if (!user) throw new ApiError(validationStatus.notFound, "User not found");
+    const userInstance = await User.findById(userId);
+    if (!userInstance) throw new ApiError(validationStatus.notFound, "User not found");
 
-    const userInstance = await User.findById(userId); // Still need instance for methods or use helpers
     const accessToken = userInstance.generateAccessToken();
     const refreshToken = userInstance.generateRefreshToken();
     userInstance.refreshToken = refreshToken;
@@ -39,11 +35,8 @@ const registerUser = AsyncHandler(async (req, res) => {
     return res.status(400).json({ message: "All required fields must be filled" });
   }
   // 2️⃣ Check if user already exists
-  const existingUsers = await User.aggregate([
-    { $match: { email } },
-    { $limit: 1 }
-  ]);
-  if (existingUsers.length > 0) {
+  const existingUser = await User.findOne({ email }).select("_id");
+  if (existingUser) {
     return res.status(400).json({ message: "Email is already registered" });
   }
 
@@ -76,14 +69,8 @@ const registerUser = AsyncHandler(async (req, res) => {
     coverPic: coverImageUrl,
   });
 
-  // 4️⃣ Fetch safe user object using .select() (exclude password & refreshToken)
-  // [MODIFIED to use aggregation pipeline as requested]
-  const safeUsers = await User.aggregate([
-    { $match: { _id: newUser._id } },
-    { $project: { password: 0, refreshToken: 0 } }
-  ]);
-
-  const safeUser = safeUsers[0];
+  // 4️⃣ Fetch safe user object (exclude password & refreshToken)
+  const safeUser = await User.findById(newUser._id).select("-password -refreshToken");
 
   if (!safeUser) {
     throw new ApiError(
@@ -136,13 +123,8 @@ const loginUser = AsyncHandler(async (req, res) => {
 
   // we have to decide if this operation is expensive or not ?? what is  more suitable for action here
 
-  // [MODIFIED to use aggregation pipeline as requested]
-  const loggedInUsers = await User.aggregate([
-    { $match: { _id: user._id } },
-    { $project: { password: 0, refreshToken: 0 } }
-  ]);
-
-  const loggedInUser = loggedInUsers[0];
+  // [REFACTORED to use findById for better readability]
+  const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
   const options = {
     httpOnly: true,
@@ -267,13 +249,7 @@ const myProfile = AsyncHandler(async (req, res) => {
     throw new ApiError(validationStatus.unauthorized, "Unauthorized access")
   }
   // 2️⃣ Fetch user and exclude sensitive fields
-  // [MODIFIED to use aggregation pipeline as requested]
-  const users = await User.aggregate([
-    { $match: { _id: new mongoose.Types.ObjectId(userId) } },
-    { $project: { password: 0, refreshToken: 0 } }
-  ]);
-
-  const user = users[0];
+  const user = await User.findById(userId).select("-password -refreshToken");
 
   if (!user) {
     throw new ApiError(validationStatus.notFound, "user not found")

@@ -27,12 +27,7 @@ const getBrandDashboard = AsyncHandler(async (req, res) => {
         throw new ApiError(validationStatus.forbidden, "Access Denied");
     }
     // Get brand profile
-    // [MODIFIED to use aggregation pipeline as requested]
-    const brands = await Brand.aggregate([
-        { $match: { user: new mongoose.Types.ObjectId(userId) } },
-        { $limit: 1 }
-    ]);
-    const brand = brands[0];
+    const brand = await Brand.findOne({ user: userId }).select("_id").lean();
     if (!brand) {
         throw new ApiError(validationStatus.notFound, "Brand profile not found");
     }
@@ -205,8 +200,10 @@ const getBrandActivity = AsyncHandler(async (req, res) => {
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, {
             activities: result.data,
-            totalCount: result.totalCount[0]?.count || 0,
+            total: result.totalCount[0]?.count || 0,
             unreadCount: result.unreadCount[0]?.count || 0,
+            page: Number(page),
+            pages: Math.ceil((result.totalCount[0]?.count || 0) / limit)
         },
             "Brand activities fetched successfully")
     );

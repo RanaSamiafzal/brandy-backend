@@ -11,6 +11,9 @@ import {
     submitDeliverable,
     approveDeliverable,
     requestRevision,
+    getCollaborationProgress,
+    getCollaborationActivity,
+    getDeliverableSubmission,
 } from "../controllers/collaborationController.js";
 import { verifyJwt } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
@@ -42,6 +45,12 @@ router.route("/:id/cancel")
 router.route("/:id/complete")
     .patch(roleMiddleware("brand"), completeCollaboration);
 
+router.route("/:id/progress")
+    .get(getCollaborationProgress);
+
+router.route("/:id/activity")
+    .get(getCollaborationActivity);
+
 
 // ─────────────────────────────────────────────
 // Deliverable Management
@@ -58,6 +67,9 @@ router.route("/:id/deliverables")
 router.route("/:id/deliverables/:deliverableId")
     .patch(roleMiddleware("influencer"), updateDeliverable)
     .delete(roleMiddleware("brand"), deleteDeliverable);
+
+router.route("/:id/deliverables/:deliverableId/submission")
+    .get(getDeliverableSubmission);
 
 
 // ─────────────────────────────────────────────
