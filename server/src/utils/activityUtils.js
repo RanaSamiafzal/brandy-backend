@@ -1,4 +1,4 @@
-import Activity from "../models/activityModel.js"
+import Activity from "../modules/activity/activity.model.js"
 
 /**
  * Creates an activity log entry.

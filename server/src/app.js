@@ -2,13 +2,13 @@ import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser';
 import passport from './config/passport.js'
-import authRouter from './routes/authRoutes.js'
-import userRouter from './routes/userRoutes.js'
-import brandRouter from './routes/brandRoutes.js'
-import influencerRouter from './routes/influencerRoutes.js'
-import campaignRouter from './routes/campaignRoutes.js'
-import collaborationRequestRouter from './routes/collaborationRequestRoutes.js'
-import collaborationRouter from './routes/collaborationRoutes.js'
+import authRouter from './modules/auth/auth.routes.js'
+import userRouter from './modules/user/user.routes.js'
+import brandRouter from './modules/brand/brand.routes.js'
+import influencerRouter from './modules/influencer/influencer.routes.js'
+import campaignRouter from './modules/campaign/campaign.routes.js'
+import collaborationRouter from './modules/collaboration/collaboration.routes.js'
+import activityRouter from './modules/activity/activity.routes.js'
 import { errorMiddleware } from './middleware/errorMiddleware.js';
 
 
@@ -44,8 +44,8 @@ app.use('/api/v1/users', userRouter)
 app.use('/api/v1/brands', brandRouter)
 app.use('/api/v1/influencers', influencerRouter)
 app.use('/api/v1/campaigns', campaignRouter)
-app.use('/api/v1/collaboration-requests', collaborationRequestRouter)
 app.use('/api/v1/collaborations', collaborationRouter)
+app.use('/api/v1/activities', activityRouter)
 
 // Error handling middleware
 app.use(errorMiddleware);

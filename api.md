@@ -1,4 +1,4 @@
-# Brandy API Documentation 🚀
+# Brandly API Documentation 🚀
 
 > **Version 1.2.0** | Professional Brand-Influencer Integration Guide
 
@@ -50,39 +50,34 @@
 
 ## 🔐 Authentication (`/auth`)
 
-| Endpoint            | Method    | Description                                      |
-| ------------------- | --------- | ------------------------------------------------ |
-| `/register`         | `POST`    | Register as Brand/Influencer (Multipart)         |
-| `/login`            | `POST`    | Login to account                                 |
-| `/logout`           | `POST`    | Logout and clear cookies                         |
-| `/refresh-token`    | `POST`    | Refresh access and refresh tokens                |
-| `/profile`          | `GET`     | Get my authenticated profile data                |
-| `/forgot-password`  | `POST`    | Send 6-digit OTP to email                        |
-| `/reset-password`   | `POST`    | Reset password using OTP                         |
-| `/google`           | `GET`     | Initiate Google OAuth flow                       |
-| `/google/callback`  | `GET`     | Google OAuth callback                            |
+These routes handle user session management.
 
----
-
-## 👤 User Management (`/users`)
-
-| Endpoint            | Method    | Description                                      |
-| ------------------- | --------- | ------------------------------------------------ |
-| `/profile`          | `PATCH`    | Update profile (Multipart: profilePic, coverPic, logo) |
-| `/delete-account`   | `DELETE`   | Permanently delete account                       |
+| Endpoint            | Method    | Auth Req? | Description                                      |
+| ------------------- | --------- | --------- | ------------------------------------------------ |
+| `/register`         | `POST`    | No        | Register as Brand/Influencer (Multipart Form Data)|
+| `/login`            | `POST`    | No        | Login to account                                 |
+| `/logout`           | `POST`    | Yes       | Logout and clear cookies                         |
+| `/refresh-token`    | `POST`    | No        | Refresh access and refresh tokens                |
+| `/profile`          | `GET`     | Yes       | Get my authenticated profile data                |
+| `/forgot-password`  | `POST`    | No        | Send 6-digit OTP to email                        |
+| `/reset-password`   | `POST`    | No        | Reset password using OTP                         |
+| `/google`           | `GET`     | No        | Initiate Google OAuth flow                       |
+| `/google/callback`  | `GET`     | No        | Google OAuth callback                            |
 
 ---
 
 ## 🏢 Brand Suite (`/brands`)
 
+Requires `brand` role authentication.
+
 | Endpoint                     | Method    | Description                                      |
 | --------------------------- | --------- | ------------------------------------------------ |
 | `/dashboard`                | `GET`     | Brand specific performance stats                 |
-| `/profile`                  | `GET`     | Get brand profile details                        |
+| `/profile`                  | `GET`     | Get brand profile details (with user data)       |
 | `/profile`                  | `PATCH`   | Update brand metadata & logo                     |
 | `/change-password`          | `POST`    | Securely change current password                 |
 | `/activity`                 | `GET`     | Paginated list of brand activities               |
-| `/activity/:id/read`        | `PATCH`   | Mark notification as read                        |
+| `/activity/:id/read`        | `PATCH`   | Mark notification/activity as read               |
 | `/activity/:id`             | `DELETE`  | Remove activity from feed                        |
 | `/influencers`              | `GET`     | Discover & search influencers                    |
 | `/influencers/:id`          | `GET`     | View influencer profile (Brand view)             |
@@ -90,6 +85,8 @@
 ---
 
 ## 🎨 Influencer Suite (`/influencers`)
+
+Requires `influencer` role authentication.
 
 | Endpoint            | Method    | Description                                      |
 | ------------------- | --------- | ------------------------------------------------ |
@@ -101,25 +98,29 @@
 
 ## 📢 Campaigns (`/campaigns`)
 
-| Endpoint            | Method    | Description                                      |
-| ------------------- | --------- | ------------------------------------------------ |
-| `/`                 | `GET`     | List all campaigns (with filters)                |
-| `/`                 | `POST`    | Create new campaign (Brand only)                 |
-| `/:id`              | `GET`     | Full campaign brief & requirements               |
-| `/:id`              | `PATCH`   | Update campaign settings                         |
-| `/:id`              | `DELETE`  | Close/Delete campaign                            |
+Campaign management for brands and discovery for influencers.
+
+| Endpoint            | Method    | Role         | Description                                      |
+| ------------------- | --------- | ------------ | ------------------------------------------------ |
+| `/`                 | `GET`     | All          | List all campaigns (with filters)                |
+| `/`                 | `POST`    | Brand        | Create new campaign                              |
+| `/:id`              | `GET`     | All          | Full campaign brief & requirements               |
+| `/:id`              | `PATCH`   | Brand        | Update campaign settings                         |
+| `/:id`              | `DELETE`  | Brand        | Close/Delete campaign                            |
 
 ---
 
 ## 🤝 Collaboration Lifecycle
 
 ### Requests (`/collaboration-requests`)
-- `POST /`: Send collaboration invite to influencer.
-- `GET /`: List all incoming/outgoing requests.
-- `GET /:id`: View request details.
-- `PATCH /:id/accept`: Influencer accepts request.
-- `PATCH /:id/reject`: Influencer rejects request.
-- `PATCH /:id/cancel`: Brand withdraws request.
+| Endpoint            | Method    | Description                                      |
+| ------------------- | --------- | ------------------------------------------------ |
+| `/`                 | `POST`    | Send collaboration invite to influencer          |
+| `/`                 | `GET`     | List all incoming/outgoing requests              |
+| `/:id`              | `GET`     | View request details                             |
+| `/:id/accept`       | `PATCH`   | Influencer accepts request                       |
+| `/:id/reject`       | `PATCH`   | Influencer rejects request                       |
+| `/:id/cancel`       | `PATCH`   | Brand withdraws request                          |
 
 ### Active Collaborations (`/collaborations`)
 - `GET /`: List active collaborations.
@@ -134,15 +135,15 @@
 
 _All endpoints prefixed with `/collaborations/:id`_
 
-| Endpoint                                 | Method    | Role         |
-| --------------------------------------- | --------- | ------------ |
-| `/deliverables`                         | `GET`     | Both         |
-| `/deliverables`                         | `POST`    | Brand        |
-| `/deliverables/:deliverableId`          | `PATCH`   | Influencer   |
-| `/deliverables/:deliverableId`          | `DELETE`  | Brand        |
-| `/deliverables/:deliverableId/submit`   | `POST`    | Influencer   |
-| `/deliverables/:deliverableId/approve`  | `PATCH`   | Brand        |
-| `/deliverables/:deliverableId/revision` | `PATCH`   | Brand        |
+| Endpoint                                 | Method    | Role         | Description                  |
+| --------------------------------------- | --------- | ------------ | ---------------------------- |
+| `/deliverables`                         | `GET`     | Both         | List all deliverables        |
+| `/deliverables`                         | `POST`    | Brand        | Create a new deliverable     |
+| `/deliverables/:deliverableId`          | `PATCH`   | Influencer   | Update deliverable status    |
+| `/deliverables/:deliverableId`          | `DELETE`  | Brand        | Delete deliverable           |
+| `/deliverables/:deliverableId/submit`   | `POST`    | Influencer   | Submit work for review       |
+| `/deliverables/:deliverableId/approve`  | `PATCH`   | Brand        | Approve submission           |
+| `/deliverables/:deliverableId/revision` | `PATCH`   | Brand        | Request revision             |
 
 ---
 
