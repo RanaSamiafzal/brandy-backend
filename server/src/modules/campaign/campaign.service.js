@@ -22,11 +22,14 @@ const calculateStatus = (startDate, endDate) => {
  * Create a new campaign
  */
 const createCampaign = async (campaignData) => {
-    const { campaignTimeline } = campaignData;
-    const { startDate, endDate } = campaignTimeline || {};
+    // If status is provided as draft, use it. Otherwise calculate.
+    let status = campaignData.status;
     
-    // Status logic
-    const status = calculateStatus(startDate, endDate);
+    if (status !== 'draft') {
+        const { campaignTimeline } = campaignData;
+        const { startDate, endDate } = campaignTimeline || {};
+        status = calculateStatus(startDate, endDate);
+    }
     
     const campaign = await Campaign.create({
         ...campaignData,
@@ -65,8 +68,10 @@ const getAllCampaigns = async ({ brand, status, search, page = 1, limit = 10 }) 
         
     const total = await Campaign.countDocuments(query);
     
-    // Dynamically update status for each campaign if needed
+    // Dynamically update status for active/pending/completed campaigns if needed
     const updatedCampaigns = campaigns.map(campaign => {
+        if (campaign.status === 'draft') return campaign;
+        
         const { startDate, endDate } = campaign.campaignTimeline || {};
         const currentStatus = calculateStatus(startDate, endDate);
         return { ...campaign, status: currentStatus };
@@ -90,9 +95,11 @@ const getCampaignById = async (campaignId) => {
         throw new ApiError(validationStatus.notFound, "Campaign not found");
     }
     
-    // Recalculate status
-    const { startDate, endDate } = campaign.campaignTimeline || {};
-    campaign.status = calculateStatus(startDate, endDate);
+    // Recalculate status only if not a draft
+    if (campaign.status !== 'draft') {
+        const { startDate, endDate } = campaign.campaignTimeline || {};
+        campaign.status = calculateStatus(startDate, endDate);
+    }
     
     return campaign;
 };
@@ -101,14 +108,21 @@ const getCampaignById = async (campaignId) => {
  * Update a campaign
  */
 const updateCampaign = async (campaignId, updateData) => {
-    // If timeline is updated, recalculate status
-    if (updateData.campaignTimeline) {
-        const campaign = await Campaign.findById(campaignId);
-        if (campaign) {
+    // If timeline is updated or status is being changed from draft
+    const campaign = await Campaign.findById(campaignId);
+    if (campaign) {
+        // If we are explicitly setting a status (like 'draft'), keep it
+        // Otherwise, if it was a draft and we're adding a timeline, or it's not a draft, calculate.
+        if (updateData.status && updateData.status === 'draft') {
+            // Keep as draft
+        } else if (updateData.campaignTimeline || campaign.status !== 'draft') {
             const currentTimeline = campaign.campaignTimeline || {};
-            const start = updateData.campaignTimeline.startDate || currentTimeline.startDate;
-            const end = updateData.campaignTimeline.endDate || currentTimeline.endDate;
-            updateData.status = calculateStatus(start, end);
+            const start = updateData.campaignTimeline?.startDate || currentTimeline.startDate;
+            const end = updateData.campaignTimeline?.endDate || currentTimeline.endDate;
+            
+            if (start && end) {
+                updateData.status = calculateStatus(start, end);
+            }
         }
     }
     

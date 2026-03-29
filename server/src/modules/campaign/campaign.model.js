@@ -53,7 +53,7 @@ const CampaignSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'active', 'completed', 'paused'],
+    enum: ['pending', 'active', 'completed', 'paused', 'draft'],
     default: 'pending',
   },
   image: {
