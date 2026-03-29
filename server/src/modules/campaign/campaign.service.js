@@ -22,7 +22,8 @@ const calculateStatus = (startDate, endDate) => {
  * Create a new campaign
  */
 const createCampaign = async (campaignData) => {
-    const { startDate, endDate } = campaignData;
+    const { campaignTimeline } = campaignData;
+    const { startDate, endDate } = campaignTimeline || {};
     
     // Status logic
     const status = calculateStatus(startDate, endDate);
@@ -65,10 +66,9 @@ const getAllCampaigns = async ({ brand, status, search, page = 1, limit = 10 }) 
     const total = await Campaign.countDocuments(query);
     
     // Dynamically update status for each campaign if needed
-    // Note: In a production environment, you might want a cron job to update statuses,
-    // but here we ensure the retrieved data reflects the current time.
     const updatedCampaigns = campaigns.map(campaign => {
-        const currentStatus = calculateStatus(campaign.startDate, campaign.endDate);
+        const { startDate, endDate } = campaign.campaignTimeline || {};
+        const currentStatus = calculateStatus(startDate, endDate);
         return { ...campaign, status: currentStatus };
     });
 
@@ -91,7 +91,8 @@ const getCampaignById = async (campaignId) => {
     }
     
     // Recalculate status
-    campaign.status = calculateStatus(campaign.startDate, campaign.endDate);
+    const { startDate, endDate } = campaign.campaignTimeline || {};
+    campaign.status = calculateStatus(startDate, endDate);
     
     return campaign;
 };
@@ -101,11 +102,12 @@ const getCampaignById = async (campaignId) => {
  */
 const updateCampaign = async (campaignId, updateData) => {
     // If timeline is updated, recalculate status
-    if (updateData.startDate || updateData.endDate) {
+    if (updateData.campaignTimeline) {
         const campaign = await Campaign.findById(campaignId);
         if (campaign) {
-            const start = updateData.startDate || campaign.startDate;
-            const end = updateData.endDate || campaign.endDate;
+            const currentTimeline = campaign.campaignTimeline || {};
+            const start = updateData.campaignTimeline.startDate || currentTimeline.startDate;
+            const end = updateData.campaignTimeline.endDate || currentTimeline.endDate;
             updateData.status = calculateStatus(start, end);
         }
     }

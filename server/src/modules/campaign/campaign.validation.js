@@ -11,8 +11,13 @@ const campaignCreateSchema = Joi.object({
         min: Joi.number().min(0).required(),
         max: Joi.number().min(Joi.ref('min')).required(),
     }).required(),
-    startDate: Joi.date().iso().required(),
-    endDate: Joi.date().iso().min(Joi.ref('startDate')).required(),
+    campaignTimeline: Joi.object({
+        startDate: Joi.date().iso().required(),
+        endDate: Joi.date().iso().min(Joi.ref('startDate')).required(),
+    }).required(),
+    deliverables: Joi.string().allow('').trim().max(1000),
+    targetAudience: Joi.string().allow('').trim().max(1000),
+    additionalRequirements: Joi.string().allow('').trim().max(1000),
     image: Joi.string().allow('').uri().optional(),
 });
 
@@ -27,8 +32,13 @@ const campaignUpdateSchema = Joi.object({
         min: Joi.number().min(0),
         max: Joi.number().min(Joi.ref('min')),
     }),
-    startDate: Joi.date().iso(),
-    endDate: Joi.date().iso().min(Joi.ref('startDate')),
+    campaignTimeline: Joi.object({
+        startDate: Joi.date().iso(),
+        endDate: Joi.date().iso().min(Joi.ref('startDate')),
+    }),
+    deliverables: Joi.string().allow('').trim().max(1000),
+    targetAudience: Joi.string().allow('').trim().max(1000),
+    additionalRequirements: Joi.string().allow('').trim().max(1000),
     image: Joi.string().allow('').uri().optional(),
     status: Joi.string().valid('pending', 'active', 'completed', 'paused'),
 });

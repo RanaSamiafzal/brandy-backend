@@ -23,17 +23,28 @@ const CampaignSchema = new mongoose.Schema({
       required: true,
     }
   ],
+  deliverables: {
+    type: String,
+    trim: true,
+    default: "",
+  },
+  targetAudience: {
+    type: String,
+    trim: true,
+    default: "",
+  },
+  additionalRequirements: {
+    type: String,
+    trim: true,
+    default: "",
+  },
   budget: {
     min: { type: Number, required: true },
     max: { type: Number, required: true }
   },
-  startDate: {
-    type: Date,
-    required: true,
-  },
-  endDate: {
-    type: Date,
-    required: true,
+  campaignTimeline: {
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true }
   },
   brand: {
     type: mongoose.Schema.Types.ObjectId,
