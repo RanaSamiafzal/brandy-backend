@@ -45,3 +45,4 @@ export const brandController = {
     getBrandProfile,
     updateBrandProfile,
 };
+
