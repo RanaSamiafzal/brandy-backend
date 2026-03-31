@@ -1,10 +1,12 @@
 import Brand from "./brand.model.js";
 import Campaign from "../campaign/campaign.model.js";
-import CollaborationRequest from "../collaboration/collaboration-request.model.js"; // Note: I'll name it collaboration-request when I implement it
+import CollaborationRequest from "../collaboration/collaboration-request.model.js";
 import Activity from "../activity/activity.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import mongoose from "mongoose";
+import { influencerService } from "../influencer/influencer.service.js";
+import { activityService } from "../activity/activity.service.js";
 
 /**
  * Get brand dashboard statistics
@@ -55,11 +57,54 @@ const getDashboardStats = async (userId) => {
         .select("name status createdAt")
         .lean();
 
+    const campaignData = campaignStats[0] || { totalCampaigns: 0, activeCampaigns: 0, completedCampaigns: 0 };
+    const collaborationData = collaborationStats[0] || { totalRequests: 0, acceptedRequests: 0, pendingRequests: 0, totalInfluencersContacted: 0 };
+
     return {
-        campaignStats: campaignStats[0] || { totalCampaigns: 0, activeCampaigns: 0, completedCampaigns: 0 },
-        collaborationStats: collaborationStats[0] || { totalRequests: 0, acceptedRequests: 0, pendingRequests: 0, totalInfluencersContacted: 0 },
+        totalCampaigns: campaignData.totalCampaigns,
+        activeCampaigns: campaignData.activeCampaigns,
+        completedCampaigns: campaignData.completedCampaigns,
+        totalRequests: collaborationData.totalRequests,
+        acceptedRequests: collaborationData.acceptedRequests,
+        pendingRequests: collaborationData.pendingRequests,
+        totalInfluencersContacted: collaborationData.totalInfluencersContacted,
         recentCampaigns,
     };
+};
+
+/**
+ * Get influencers for brand search
+ */
+const getBrandInfluencers = async (queryParams) => {
+    return await influencerService.searchInfluencers(queryParams);
+};
+
+/**
+ * Get brand activity
+ */
+const getBrandActivity = async (userId, queryParams) => {
+    return await activityService.getActivities(userId, queryParams);
+};
+
+/**
+ * Get single influencer by ID
+ */
+const getBrandInfluencerById = async (influencerId) => {
+    return await influencerService.getInfluencerById(influencerId);
+};
+
+/**
+ * Mark activity as read
+ */
+const markBrandActivityAsRead = async (activityId, userId) => {
+    return await activityService.markAsRead(activityId, userId);
+};
+
+/**
+ * Delete activity
+ */
+const deleteBrandActivity = async (activityId, userId) => {
+    return await activityService.deleteActivity(activityId, userId);
 };
 
 /**
@@ -99,4 +144,9 @@ export const brandService = {
     getDashboardStats,
     getProfile,
     updateProfile,
+    getBrandInfluencers,
+    getBrandActivity,
+    getBrandInfluencerById,
+    markBrandActivityAsRead,
+    deleteBrandActivity,
 };

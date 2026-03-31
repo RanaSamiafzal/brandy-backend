@@ -11,6 +11,11 @@ const router = Router();
 router.use(verifyJwt, roleMiddleware(["brand"]));
 
 router.get("/dashboard", brandController.getBrandDashboard);
+router.get("/influencers", brandController.getBrandInfluencers);
+router.get("/influencers/:id", brandController.getBrandInfluencer);
+router.get("/activity", brandController.getBrandActivity);
+router.patch("/activity/:id/read", brandController.markActivityAsRead);
+router.delete("/activity/:id", brandController.deleteActivity);
 router.get("/profile", brandController.getBrandProfile);
 
 router.patch(
