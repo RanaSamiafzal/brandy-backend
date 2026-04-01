@@ -3,6 +3,7 @@ import { AsyncHandler } from "../../utils/Asynchandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
+import { checkAndMarkComplete, getCompletionStatus } from "../../utils/profileCompletion.js";
 
 /**
  * Get brand dashboard
@@ -80,18 +81,133 @@ const getBrandProfile = AsyncHandler(async (req, res) => {
 /**
  * Update brand profile
  */
+// const updateBrandProfile = AsyncHandler(async (req, res) => {
+//     const updateData = { ...req.body };
+//     if (req.files?.logo?.[0]?.path) {
+//         const logoUpload = await uploadOnCloudinary(req.files.logo[0].path);
+//         if (logoUpload) updateData.logo = logoUpload.url;
+//     }
+
+//     const brand = await brandService.updateProfile(req.user._id, updateData);
+//     return res.status(validationStatus.ok).json(
+//         new ApiResponse(validationStatus.ok, brand, "Brand profile updated successfully")
+//     );
+// });
+
+
+/**
+ * PATCH /brands/update-profile
+ * Saves brandname, industry, budgetRange, description, website, address, logo
+ * Runs completion check after every save
+ */
 const updateBrandProfile = AsyncHandler(async (req, res) => {
     const updateData = { ...req.body };
+
     if (req.files?.logo?.[0]?.path) {
         const logoUpload = await uploadOnCloudinary(req.files.logo[0].path);
-        if (logoUpload) updateData.logo = logoUpload.url;
+        if (logoUpload?.url) updateData.logo = logoUpload.url;
     }
 
     const brand = await brandService.updateProfile(req.user._id, updateData);
+
+    await checkAndMarkComplete(req.user._id, "brand");
+    const completion = await getCompletionStatus(req.user._id, "brand");
+
     return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, brand, "Brand profile updated successfully")
+        new ApiResponse(validationStatus.ok, { brand, completion }, "Brand profile updated successfully")
     );
 });
+
+
+/**
+ * Get brand public profile
+ */
+// const getBrandPublicProfile = AsyncHandler(async (req, res) => {
+//     const { brandId } = req.params;
+//     const data = await brandService.getPublicProfile(brandId);
+//     return res
+//         .status(validationStatus.ok)
+//         .json(new ApiResponse(validationStatus.ok, data, "Brand profile fetched successfully"));
+// });
+
+/**
+ * GET /brands/:brandId/public
+ * Any authenticated user can view a brand's public profile + active campaigns
+ * Only works if brand.profileComplete = true
+ */
+const getBrandPublicProfile = AsyncHandler(async (req, res) => {
+    const { brandId } = req.params;
+    const data = await brandService.getPublicProfile(brandId);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, data, "Brand profile fetched successfully")
+    );
+});
+
+/**
+ * Get brand public list
+ */
+
+// const getPublicBrandList = AsyncHandler(async (req, res) => {
+//     const { search, industry, page = 1, limit = 12 } = req.query;
+//     const skip = (Number(page) - 1) * Number(limit);
+
+//     const query = {};
+//     if (industry && industry !== "All") {
+//         query.industry = { $regex: industry, $options: "i" };
+//     }
+
+//     const pipeline = [
+//         { $match: query },
+//         { $lookup: { from: "users", localField: "user", foreignField: "_id", as: "user" } },
+//         { $unwind: "$user" },
+//         ...(search ? [{
+//             $match: {
+//                 $or: [
+//                     { brandname: { $regex: search, $options: "i" } },
+//                     { "user.fullname": { $regex: search, $options: "i" } },
+//                 ]
+//             }
+//         }] : []),
+//         { $project: { "user.password": 0, "user.refreshToken": 0 } },
+//         { $sort: { createdAt: -1 } },
+//         {
+//             $facet: {
+//                 brands: [{ $skip: skip }, { $limit: Number(limit) }],
+//                 totalCount: [{ $count: "count" }],
+//             },
+//         },
+//     ];
+
+//     const result = await Brand.aggregate(pipeline);
+//     const brands = result[0]?.brands || [];
+//     const total = result[0]?.totalCount[0]?.count || 0;
+
+//     return res.status(validationStatus.ok).json(
+//         new ApiResponse(validationStatus.ok, {
+//             brands,
+//             total,
+//             page: Number(page),
+//             pages: Math.ceil(total / Number(limit)),
+//         }, "Brands fetched")
+//     );
+// });
+
+
+/**
+ * GET /brands/public-list
+ * Used by influencer Explore page — Brands tab
+ * Only returns brands with profileComplete = true
+ */
+const getPublicBrandList = AsyncHandler(async (req, res) => {
+    const { search, industry, page = 1, limit = 12 } = req.query;
+    const data = await brandService.getPublicBrandList({ search, industry, page, limit });
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, data, "Brands fetched successfully")
+    );
+});
+
+
+
 
 export const brandController = {
     getBrandDashboard,
@@ -102,5 +218,7 @@ export const brandController = {
     getBrandInfluencer,
     markActivityAsRead,
     deleteActivity,
+    getBrandPublicProfile,
+    getPublicBrandList,
 };
 

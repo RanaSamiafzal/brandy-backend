@@ -140,6 +140,132 @@ const updateProfile = async (userId, updateData) => {
     return await getProfile(userId);
 };
 
+
+
+
+
+/**
+ * Public profile — single brand + their active campaigns
+ * VISIBILITY GATED: 404 if profileComplete = false
+ */
+const getPublicProfile = async (brandId) => {
+    const brand = await Brand.aggregate([
+        { $match: { _id: new mongoose.Types.ObjectId(brandId) } },
+        { $lookup: { from: "users", localField: "user", foreignField: "_id", as: "user" } },
+        { $unwind: "$user" },
+        {
+            $project: {
+                "user.password": 0,
+                "user.refreshToken": 0,
+                "user.passwordResetOTP": 0,
+            },
+        },
+    ]);
+
+    if (!brand.length) throw new ApiError(validationStatus.notFound, "Brand not found");
+
+    // VISIBILITY GATE
+    if (!brand[0].user?.profileComplete) {
+        throw new ApiError(validationStatus.notFound, "This brand profile is not available");
+    }
+
+    const campaigns = await Campaign.find({
+        brand: brand[0].user._id,
+        isDeleted: false,
+        status: { $in: ["active", "pending"] },
+    })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean();
+
+    return { brand: brand[0], campaigns };
+};
+
+
+/**
+ * Public brand list for influencer explore — VISIBILITY GATED
+ * Only returns brands with User.profileComplete = true
+ */
+const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) => {
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const pipeline = [
+        // Join user to get profileComplete
+        {
+            $lookup: {
+                from: "users",
+                localField: "user",
+                foreignField: "_id",
+                as: "userDoc",
+            },
+        },
+        { $unwind: "$userDoc" },
+
+        // ── VISIBILITY GATE ───────────────────────────────────────────────────
+        {
+            $match: {
+                "userDoc.profileComplete": true,
+                "userDoc.isBlocked": false,
+            },
+        },
+
+        // Industry filter
+        ...(industry && industry !== "All"
+            ? [{ $match: { industry: { $regex: industry, $options: "i" } } }]
+            : []),
+
+        // Search filter
+        ...(search
+            ? [{
+                $match: {
+                    $or: [
+                        { brandname: { $regex: search, $options: "i" } },
+                        { "userDoc.fullname": { $regex: search, $options: "i" } },
+                        { industry: { $regex: search, $options: "i" } },
+                    ],
+                },
+            }]
+            : []),
+
+        {
+            $project: {
+                brandname: 1,
+                industry: 1,
+                description: 1,
+                logo: 1,
+                website: 1,
+                address: 1,
+                budgetRange: 1,
+                createdAt: 1,
+                "userDoc.fullname": 1,
+                "userDoc.profilePic": 1,
+                "userDoc.isVerified": 1,
+            },
+        },
+
+        { $sort: { createdAt: -1 } },
+
+        {
+            $facet: {
+                brands: [{ $skip: skip }, { $limit: Number(limit) }],
+                totalCount: [{ $count: "count" }],
+            },
+        },
+    ];
+
+    const result = await Brand.aggregate(pipeline);
+    const brands = result[0]?.brands || [];
+    const total = result[0]?.totalCount[0]?.count || 0;
+
+    return {
+        brands,
+        total,
+        page: Number(page),
+        pages: Math.ceil(total / Number(limit)),
+    };
+};
+
+
 export const brandService = {
     getDashboardStats,
     getProfile,
@@ -149,4 +275,6 @@ export const brandService = {
     getBrandInfluencerById,
     markBrandActivityAsRead,
     deleteBrandActivity,
+    getPublicProfile,
+    getPublicBrandList,
 };

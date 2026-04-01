@@ -6,7 +6,11 @@ import { verifyJwt } from "../../middleware/authMiddleware.js";
 import { roleMiddleware } from "../../middleware/roleMiddleware.js";
 import { upload } from "../../middleware/multerMiddleware.js";
 
+
 const router = Router();
+
+router.get("/public-list", brandController.getPublicBrandList);
+router.get("/:brandId/public", brandController.getBrandPublicProfile);
 
 router.use(verifyJwt, roleMiddleware(["brand"]));
 
@@ -26,3 +30,5 @@ router.patch(
 );
 
 export default router;
+
+

@@ -36,4 +36,11 @@ router.route("/:campaignId")
         campaignController.deleteCampaign
     );
 
+router.post(
+    "/:campaignId/apply",
+    roleMiddleware(["influencer"]),
+    validate(campaignValidation.applyToCampaignSchema),
+    campaignController.applyToCampaign
+);
+
 export default router;

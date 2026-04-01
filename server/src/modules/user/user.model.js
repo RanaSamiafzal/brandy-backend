@@ -41,6 +41,7 @@ const UserSchema = new mongoose.Schema(
             type: String, // Cloudinary URL
             default: "",
         },
+
         passwordResetOTP: String,
         passwordResetExpires: Date,
         passwordResetAttempts: {
@@ -55,10 +56,19 @@ const UserSchema = new mongoose.Schema(
             default: false,
         },
         coverPic: {
-            type: String, // Cloudinary URL
+            type: String, 
             default: "",
         },
         lastLogin: Date,
+        profileComplete: {
+            type: Boolean,
+            default: false,
+            index: true, 
+        },
+        profileCompletedAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
         timestamps: true,
