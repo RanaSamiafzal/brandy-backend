@@ -5,15 +5,25 @@ import { validationStatus } from "../../utils/ValidationStatusCode.js";
 /**
  * Get activities for a user
  */
-const getActivities = async (userId, { page = 1, limit = 20 }) => {
+const getActivities = async (userId, { page = 1, limit = 20, category, unreadOnly }) => {
     const skip = (page - 1) * limit;
-    const activities = await Activity.find({ user: userId, isDeleted: false })
+    const filter = { user: userId, isDeleted: false };
+    
+    if (category && category !== 'all') {
+        filter.category = category;
+    }
+    
+    if (unreadOnly === 'true' || unreadOnly === true) {
+        filter.isRead = false;
+    }
+
+    const activities = await Activity.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit))
         .lean();
 
-    const total = await Activity.countDocuments({ user: userId, isDeleted: false });
+    const total = await Activity.countDocuments(filter);
 
     return {
         activities,

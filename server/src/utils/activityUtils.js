@@ -11,8 +11,9 @@ import Activity from "../modules/activity/activity.model.js"
  * @param {string} params.title - Title of the notification/activity
  * @param {string} params.description - Detailed description
  * @param {string} [params.relatedId] - Optional related record ID (campaign, collab, etc.)
+ * @param {string} params.category - The category for frontend filtering (application/collaboration/message/system)
  */
-const emitActivity = async ({ user, role, type, title, description, relatedId = null }) => {
+const emitActivity = async ({ user, role, type, title, description, relatedId = null, category }) => {
     try {
         await Activity.create({
             user,
@@ -20,7 +21,8 @@ const emitActivity = async ({ user, role, type, title, description, relatedId = 
             type,
             title,
             description,
-            relatedId
+            relatedId,
+            category
         });
         
         // FUTURE: Socket.io emission would go here

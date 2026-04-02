@@ -59,6 +59,11 @@ const ActivitySchema = new mongoose.Schema(
         deletedAt: {
             type: Date,
             default: null
+        },
+        category: {
+            type: String,
+            enum: ['application', 'collaboration', 'message', 'system'],
+            required: true
         }
     },
     {

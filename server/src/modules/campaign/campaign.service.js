@@ -1,6 +1,7 @@
 import Campaign from "./campaign.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
+import { emitActivity } from "../../utils/activityUtils.js";
 
 /**
  * Calculate campaign status based on current date and timeline
@@ -34,6 +35,17 @@ const createCampaign = async (campaignData) => {
     const campaign = await Campaign.create({
         ...campaignData,
         status,
+    });
+    
+    // Emit activity
+    await emitActivity({
+        user: campaignData.user || campaignData.brand,
+        role: 'brand',
+        type: 'campaign_created',
+        title: 'New Campaign Created',
+        description: `Your campaign "${campaign.name}" has been created successfully.`,
+        relatedId: campaign._id,
+        category: 'system'
     });
     
     return campaign;
@@ -136,6 +148,17 @@ const updateCampaign = async (campaignId, updateData) => {
         throw new ApiError(validationStatus.notFound, "Campaign not found");
     }
     
+    // Emit activity
+    await emitActivity({
+        user: updatedCampaign.user || updatedCampaign.brand,
+        role: 'brand',
+        type: 'campaign_updated',
+        title: 'Campaign Updated',
+        description: `Your campaign "${updatedCampaign.name}" has been updated.`,
+        relatedId: updatedCampaign._id,
+        category: 'system'
+    });
+    
     return updatedCampaign;
 };
 
@@ -152,6 +175,17 @@ const deleteCampaign = async (campaignId) => {
     if (!campaign) {
         throw new ApiError(validationStatus.notFound, "Campaign not found");
     }
+    
+    // Emit activity
+    await emitActivity({
+        user: campaign.user || campaign.brand,
+        role: 'brand',
+        type: 'campaign_deleted',
+        title: 'Campaign Deleted',
+        description: `Your campaign "${campaign.name}" has been deleted.`,
+        relatedId: campaign._id,
+        category: 'system'
+    });
     
     return campaign;
 };

@@ -1,4 +1,5 @@
 import Influencer from "./influencer.model.js";
+import User from "../user/user.model.js";
 import CollaborationRequest from "../collaboration/collaboration-request.model.js";
 import Activity from "../activity/activity.model.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -77,56 +78,55 @@ const updateProfile = async (userId, updateData) => {
 const searchInfluencers = async ({ search, category, platform, minPrice, maxPrice, minFollowers, rating, location, page = 1, limit = 10, sort = "latest" }) => {
     const skip = (page - 1) * limit;
 
-    const matchStage = { isAvailable: true };
-    if (search) matchStage.username = { $regex: search, $options: "i" };
-    if (category) matchStage.category = category;
-    if (location) matchStage.location = { $regex: location, $options: "i" };
-    if (rating) matchStage.averageRating = { $gte: Number(rating) };
+    // DIAGNOSTIC COUNTS
+    const totalUsersInSystem = await User.countDocuments({});
+    const influencersStrictMatch = await User.countDocuments({ role: "influencer" });
+    const influencersRegexMatch = await User.countDocuments({ role: { $regex: /^influencer$/i } });
 
-    const pipeline = [
-        { $match: matchStage },
-        { $unwind: "$platforms" },
-        ...(platform ? [{ $match: { "platforms.name": platform } }] : []),
-        ...(minFollowers ? [{ $match: { "platforms.followers": { $gte: Number(minFollowers) } } }] : []),
-        { $unwind: "$platforms.services" },
-        ...(minPrice || maxPrice ? [{
-            $match: {
-                "platforms.services.price": {
-                    ...(minPrice ? { $gte: Number(minPrice) } : {}),
-                    ...(maxPrice ? { $lte: Number(maxPrice) } : {}),
-                }
-            }
-        }] : []),
-        {
-            $group: {
-                _id: "$_id",
-                username: { $first: "$username" },
-                profilePicture: { $first: "$profilePicture" },
-                category: { $first: "$category" },
-                averageRating: { $first: "$averageRating" },
-                location: { $first: "$location" },
-                platforms: { $push: "$platforms" },
-                minPrice: { $min: "$platforms.services.price" },
-            }
-        },
-        sort === "rating_desc" ? { $sort: { averageRating: -1 } } : { $sort: { createdAt: -1 } },
-        {
-            $facet: {
-                data: [{ $skip: skip }, { $limit: Number(limit) }],
-                totalCount: [{ $count: "count" }],
-            }
-        },
-    ];
+    // Use case-insensitive role matching just in case
+    const findQuery = {
+        role: { $regex: /^influencer$/i }
+    };
 
-    const result = await Influencer.aggregate(pipeline);
-    const influencers = result[0].data || [];
-    const totalCount = result[0].totalCount[0]?.count || 0;
+    if (search) {
+        findQuery.fullname = { $regex: search, $options: "i" };
+    }
+
+    const users = await User.find(findQuery)
+        .skip(skip)
+        .limit(Number(limit))
+        .sort({ createdAt: -1 })
+        .lean();
+
+    const total = await User.countDocuments(findQuery);
+
+    const influencers = await Promise.all(users.map(async (u) => {
+        const profile = await Influencer.findOne({ user: u._id }).lean();
+        return {
+            _id: u._id,
+            fullName: u.fullname,
+            username: profile?.username || u.fullname,
+            profilePicture: u.profilePic || profile?.profilePicture || "",
+            category: profile?.category || "Lifestyle",
+            averageRating: profile?.averageRating || 0,
+            location: profile?.location || "Worldwide",
+            platforms: profile?.platforms || [],
+            minPrice: 0,
+            createdAt: u.createdAt
+        };
+    }));
 
     return {
         influencers,
-        total: totalCount,
+        total,
         page: Number(page),
-        pages: Math.ceil(totalCount / limit),
+        pages: Math.ceil(total / limit),
+        _debug: {
+            totalUsersInSystem,
+            influencersStrictMatch,
+            influencersRegexMatch,
+            queryUsed: findQuery
+        }
     };
 };
 

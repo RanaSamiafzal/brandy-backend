@@ -4,6 +4,8 @@ import Campaign from "../campaign/campaign.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import mongoose from "mongoose";
+import { emitActivity } from "../../utils/activityUtils.js";
+import User from "../user/user.model.js";
 
 /**
  * Send a collaboration request
@@ -33,6 +35,21 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
         note,
         deliveryDays,
     });
+
+    // Emit activity for the receiver
+    const receiverUser = await User.findById(request.receiver).select('role');
+    const campaign = await Campaign.findById(request.campaign).select('name');
+    
+    await emitActivity({
+        user: request.receiver,
+        role: receiverUser?.role || (initiatedBy === 'brand' ? 'influencer' : 'brand'),
+        type: 'collaboration_request_sent',
+        title: 'New Collaboration Request',
+        description: `You have received a new collaboration request for "${campaign?.name || 'a campaign'}"`,
+        relatedId: request._id,
+        category: 'application'
+    });
+
     return request;
 };
 
@@ -42,23 +59,73 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
 const getRequests = async (userId, { status, page = 1, limit = 10 }) => {
     const skip = (page - 1) * limit;
     const matchStage = { $or: [{ sender: userId }, { receiver: userId }] };
-    if (status) matchStage.status = status;
+    if (status && status !== "all") matchStage.status = status;
 
     const result = await CollaborationRequest.aggregate([
         { $match: matchStage },
-        { $lookup: { from: 'users', localField: 'sender', foreignField: '_id', as: "senderUser" } },
-        { $unwind: '$senderUser' },
-        { $lookup: { from: 'users', localField: 'receiver', foreignField: '_id', as: "receiverUser" } },
-        { $unwind: '$receiverUser' },
-        { $lookup: { from: 'campaigns', localField: 'campaign', foreignField: '_id', as: 'campaignData' } },
-        { $unwind: '$campaignData' },
+        // Join with sender details
+        {
+            $lookup: {
+                from: "users",
+                localField: "sender",
+                foreignField: "_id",
+                as: "senderDetails",
+            },
+        },
+        { $unwind: "$senderDetails" },
+        // Join with receiver details
+        {
+            $lookup: {
+                from: "users",
+                localField: "receiver",
+                foreignField: "_id",
+                as: "receiverDetails",
+            },
+        },
+        { $unwind: "$receiverDetails" },
+        // Join with Campaign
+        {
+            $lookup: {
+                from: "campaigns",
+                localField: "campaign",
+                foreignField: "_id",
+                as: "campaignDetails",
+            },
+        },
+        { $unwind: "$campaignDetails" },
+        // Join with Influencer Profile (for whoever is the influencer)
+        {
+            $lookup: {
+                from: "influencers",
+                let: { senderId: "$sender", receiverId: "$receiver" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $or: [
+                                    { $eq: ["$user", "$$senderId"] },
+                                    { $eq: ["$user", "$$receiverId"] },
+                                ],
+                            },
+                        },
+                    },
+                ],
+                as: "influencerProfile",
+            },
+        },
+        {
+            $addFields: {
+                influencerDetails: { $arrayElemAt: ["$influencerProfile", 0] },
+            },
+        },
+        // Sort and Page
         { $sort: { createdAt: -1 } },
         {
             $facet: {
                 data: [{ $skip: skip }, { $limit: Number(limit) }],
                 totalCount: [{ $count: "count" }],
-            }
-        }
+            },
+        },
     ]);
 
     const requests = result[0].data || [];
@@ -98,6 +165,18 @@ const acceptRequest = async (requestId, userId) => {
         status: "active",
     });
 
+    // Emit activity for the sender (the one who initiated the now-accepted request)
+    const senderUser = await User.findById(request.sender).select('role');
+    await emitActivity({
+        user: request.sender,
+        role: senderUser?.role || (request.initiatedBy === 'brand' ? 'brand' : 'influencer'),
+        type: 'collaboration_accepted',
+        title: 'Collaboration Request Accepted',
+        description: `Your request for "${campaign?.name || 'a campaign'}" was accepted!`,
+        relatedId: collaboration._id,
+        category: 'collaboration'
+    });
+
     return { request, collaboration };
 };
 
@@ -117,6 +196,22 @@ const updateRequestStatus = async (requestId, userId, status) => {
     request.status = status;
     request.respondedAt = new Date();
     await request.save();
+
+    // Emit activity for the other party
+    const targetUserId = isSender ? request.receiver : request.sender;
+    const targetUser = await User.findById(targetUserId).select('role');
+    const campaign = await Campaign.findById(request.campaign).select('name');
+    
+    await emitActivity({
+        user: targetUserId,
+        role: targetUser?.role || 'user',
+        type: status === "rejected" ? 'request_rejected' : 'request_cancelled',
+        title: `Collaboration Request ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+        description: `The collaboration request for "${campaign?.name || 'a campaign'}" has been ${status}.`,
+        relatedId: request._id,
+        category: 'application'
+    });
+
     return request;
 };
 

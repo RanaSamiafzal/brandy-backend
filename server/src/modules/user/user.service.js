@@ -1,6 +1,7 @@
 import User from "./user.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
+import { emitActivity } from "../../utils/activityUtils.js";
 
 /**
  * Get user by ID
@@ -26,6 +27,17 @@ const updateUserProfile = async (userId, updateData) => {
     if (!user) {
         throw new ApiError(validationStatus.notFound, "User not found");
     }
+
+    // Emit activity
+    await emitActivity({
+        user: userId,
+        role: user.role,
+        type: 'profile_updated',
+        title: 'Profile Updated',
+        description: 'You have successfully updated your profile information.',
+        category: 'system'
+    });
+
     return user;
 };
 
