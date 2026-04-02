@@ -36,4 +36,12 @@ router.route("/:campaignId")
         campaignController.deleteCampaign
     );
 
+router.post(
+    "/:campaignId/apply",
+    roleMiddleware(["influencer"]),
+    upload.fields([{ name: "portfolio", maxCount: 1 }]),
+    validate(campaignValidation.applyToCampaignSchema),
+    campaignController.applyToCampaign
+);
+
 export default router;

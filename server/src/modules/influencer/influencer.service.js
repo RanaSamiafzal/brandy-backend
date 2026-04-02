@@ -4,6 +4,7 @@ import CollaborationRequest from "../collaboration/collaboration-request.model.j
 import Activity from "../activity/activity.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
+
 import mongoose from "mongoose";
 
 /**
@@ -64,7 +65,7 @@ const updateProfile = async (userId, updateData) => {
     const updatedInfluencer = await Influencer.findOneAndUpdate(
         { user: userId },
         { $set: updateData },
-        { new: true }
+        { new: true, upsert: true, setDefaultsOnInsert: true }
     );
     if (!updatedInfluencer) {
         throw new ApiError(validationStatus.notFound, "Influencer profile not found");
@@ -75,46 +76,126 @@ const updateProfile = async (userId, updateData) => {
 /**
  * Search influences with filtering
  */
-const searchInfluencers = async ({ search, category, platform, minPrice, maxPrice, minFollowers, rating, location, page = 1, limit = 10, sort = "latest" }) => {
+// const searchInfluencers = async ({ search, category, platform, minPrice, maxPrice, minFollowers, rating, location, page = 1, limit = 10, sort = "latest" }) => {
+//     const skip = (page - 1) * limit;
+
+//     const matchStage = { isAvailable: true };
+//     if (search) matchStage.username = { $regex: search, $options: "i" };
+//     if (category) matchStage.category = category;
+//     if (location) matchStage.location = { $regex: location, $options: "i" };
+//     if (rating) matchStage.averageRating = { $gte: Number(rating) };
+
+//     const pipeline = [
+//         { $match: matchStage },
+//         { $unwind: "$platforms" },
+//         ...(platform ? [{ $match: { "platforms.name": platform } }] : []),
+//         ...(minFollowers ? [{ $match: { "platforms.followers": { $gte: Number(minFollowers) } } }] : []),
+//         { $unwind: "$platforms.services" },
+//         ...(minPrice || maxPrice ? [{
+//             $match: {
+//                 "platforms.services.price": {
+//                     ...(minPrice ? { $gte: Number(minPrice) } : {}),
+//                     ...(maxPrice ? { $lte: Number(maxPrice) } : {}),
+//                 }
+//             }
+//         }] : []),
+//         {
+//             $group: {
+//                 _id: "$_id",
+//                 username: { $first: "$username" },
+//                 profilePicture: { $first: "$profilePicture" },
+//                 category: { $first: "$category" },
+//                 averageRating: { $first: "$averageRating" },
+//                 location: { $first: "$location" },
+//                 platforms: { $push: "$platforms" },
+//                 minPrice: { $min: "$platforms.services.price" },
+//             }
+//         },
+//         sort === "rating_desc" ? { $sort: { averageRating: -1 } } : { $sort: { createdAt: -1 } },
+//         {
+//             $facet: {
+//                 data: [{ $skip: skip }, { $limit: Number(limit) }],
+//                 totalCount: [{ $count: "count" }],
+//             }
+//         },
+//     ];
+
+//     const result = await Influencer.aggregate(pipeline);
+//     const influencers = result[0].data || [];
+//     const totalCount = result[0].totalCount[0]?.count || 0;
+
+//     return {
+//         influencers,
+//         total: totalCount,
+//         page: Number(page),
+//         pages: Math.ceil(totalCount / limit),
+//     };
+// };
+
+/**
+ * Search influencers — VISIBILITY GATED
+ * Only returns influencers where User.profileComplete = true AND User.isBlocked = false
+ */
+
+const searchInfluencers = async ({
+    search,
+    category,
+    platform,
+    minPrice,
+    maxPrice,
+    minFollowers,
+    rating,
+    location,
+    page = 1,
+    limit = 10,
+    sort = "latest",
+}) => {
     const skip = (page - 1) * limit;
 
-    // DIAGNOSTIC COUNTS
-    const totalUsersInSystem = await User.countDocuments({});
-    const influencersStrictMatch = await User.countDocuments({ role: "influencer" });
-    const influencersRegexMatch = await User.countDocuments({ role: { $regex: /^influencer$/i } });
+    const matchStage = { isAvailable: true };
+    if (search) matchStage.username = { $regex: search, $options: "i" };
+    if (category) matchStage.category = category;
+    if (location) matchStage.location = { $regex: location, $options: "i" };
+    if (rating) matchStage.averageRating = { $gte: Number(rating) };
 
-    // Use case-insensitive role matching just in case
-    const findQuery = {
-        role: { $regex: /^influencer$/i }
-    };
+    const pipeline = [
+        { $match: matchStage },
+        { $unwind: "$platforms" },
+        ...(platform ? [{ $match: { "platforms.name": platform } }] : []),
+        ...(minFollowers ? [{ $match: { "platforms.followers": { $gte: Number(minFollowers) } } }] : []),
+        { $unwind: "$platforms.services" },
+        ...(minPrice || maxPrice ? [{
+            $match: {
+                "platforms.services.price": {
+                    ...(minPrice ? { $gte: Number(minPrice) } : {}),
+                    ...(maxPrice ? { $lte: Number(maxPrice) } : {}),
+                }
+            }
+        }] : []),
+        {
+            $group: {
+                _id: "$_id",
+                username: { $first: "$username" },
+                profilePicture: { $first: "$profilePicture" },
+                category: { $first: "$category" },
+                averageRating: { $first: "$averageRating" },
+                location: { $first: "$location" },
+                platforms: { $push: "$platforms" },
+                minPrice: { $min: "$platforms.services.price" },
+            }
+        },
+        sort === "rating_desc" ? { $sort: { averageRating: -1 } } : { $sort: { createdAt: -1 } },
+        {
+            $facet: {
+                data: [{ $skip: skip }, { $limit: Number(limit) }],
+                totalCount: [{ $count: "count" }],
+            }
+        },
+    ];
 
-    if (search) {
-        findQuery.fullname = { $regex: search, $options: "i" };
-    }
-
-    const users = await User.find(findQuery)
-        .skip(skip)
-        .limit(Number(limit))
-        .sort({ createdAt: -1 })
-        .lean();
-
-    const total = await User.countDocuments(findQuery);
-
-    const influencers = await Promise.all(users.map(async (u) => {
-        const profile = await Influencer.findOne({ user: u._id }).lean();
-        return {
-            _id: u._id,
-            fullName: u.fullname,
-            username: profile?.username || u.fullname,
-            profilePicture: u.profilePic || profile?.profilePicture || "",
-            category: profile?.category || "Lifestyle",
-            averageRating: profile?.averageRating || 0,
-            location: profile?.location || "Worldwide",
-            platforms: profile?.platforms || [],
-            minPrice: 0,
-            createdAt: u.createdAt
-        };
-    }));
+    const result = await Influencer.aggregate(pipeline);
+    const influencers = result[0].data || [];
+    const totalCount = result[0].totalCount[0]?.count || 0;
 
     return {
         influencers,
@@ -130,15 +211,53 @@ const searchInfluencers = async ({ search, category, platform, minPrice, maxPric
     };
 };
 
+
+
 /**
  * Get single influencer by ID
+ */
+// const getInfluencerById = async (influencerId) => {
+//     const influencers = await Influencer.aggregate([
+//         { $match: { _id: new mongoose.Types.ObjectId(influencerId) } },
+//         { $lookup: { from: "users", localField: "user", foreignField: "_id", as: "user" } },
+//         { $unwind: "$user" },
+//         { $limit: 1 }
+//     ]);
+
+//     if (!influencers.length) {
+//         throw new ApiError(validationStatus.notFound, "Influencer not found");
+//     }
+
+//     const influencer = influencers[0];
+//     const totalFollowers = influencer.platforms.reduce((acc, p) => acc + (p.followers || 0), 0);
+
+//     return { influencer, totalFollowers };
+// };
+
+/**
+ * Get single influencer by ID — VISIBILITY GATED
+ * Returns 404 if profileComplete = false (invisible to public)
  */
 const getInfluencerById = async (influencerId) => {
     const influencers = await Influencer.aggregate([
         { $match: { _id: new mongoose.Types.ObjectId(influencerId) } },
-        { $lookup: { from: "users", localField: "user", foreignField: "_id", as: "user" } },
+        {
+            $lookup: {
+                from: "users",
+                localField: "user",
+                foreignField: "_id",
+                as: "user",
+            },
+        },
         { $unwind: "$user" },
-        { $limit: 1 }
+        { $limit: 1 },
+        {
+            $project: {
+                "user.password": 0,
+                "user.refreshToken": 0,
+                "user.passwordResetOTP": 0,
+            },
+        },
     ]);
 
     if (!influencers.length) {
@@ -146,10 +265,26 @@ const getInfluencerById = async (influencerId) => {
     }
 
     const influencer = influencers[0];
-    const totalFollowers = influencer.platforms.reduce((acc, p) => acc + (p.followers || 0), 0);
+
+    // VISIBILITY GATE — profile must be complete to be publicly viewable
+    // if (!influencer.user?.profileComplete) {
+    //     throw new ApiError(
+    //         validationStatus.notFound,
+    //         "This influencer's profile is not available."
+    //     );
+    // }
+
+    const totalFollowers = influencer.platforms.reduce(
+        (acc, p) => acc + (p.followers || 0),
+        0
+    );
 
     return { influencer, totalFollowers };
 };
+
+
+
+
 
 export const influencerService = {
     getDashboardStats,

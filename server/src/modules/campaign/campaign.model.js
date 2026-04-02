@@ -38,6 +38,17 @@ const CampaignSchema = new mongoose.Schema({
     trim: true,
     default: "",
   },
+  goals: [
+    {
+      type: String,
+      trim: true,
+    }
+  ],
+  competitionLevel: {
+    type: String,
+    enum: ['Low', 'Medium', 'High'],
+    default: 'Low',
+  },
   budget: {
     min: { type: Number, required: true },
     max: { type: Number, required: true }

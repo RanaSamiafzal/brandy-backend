@@ -5,6 +5,8 @@ import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { emitActivity } from "../../utils/activityUtils.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
+import Campaign from "./campaign.model.js";
+import CollaborationRequest from "../collaboration/collaboration-request.model.js";
 
 /**
  * Handle campaign creation
@@ -46,26 +48,185 @@ const createCampaign = AsyncHandler(async (req, res) => {
 /**
  * Handle fetching all campaigns with filtering and search
  */
-const getAllCampaigns = AsyncHandler(async (req, res) => {
-    const { status, search, page, limit } = req.query;
-    const userId = req.user?._id;
+// const getAllCampaigns = AsyncHandler(async (req, res) => {
+//     const { status, search, page, limit } = req.query;
+//     const userId = req.user?._id;
 
-    // Only allow brands to see their own campaigns (this is a business decision, 
-    // maybe influencers should see all active ones. For now, matching previous logic.)
+//     // Only allow brands to see their own campaigns (this is a business decision, 
+//     // maybe influencers should see all active ones. For now, matching previous logic.)
+//     const filters = {
+//         brand: req.user?.role === "brand" ? userId : null,
+//         status,
+//         search,
+//         page,
+//         limit,
+//     };
+
+//     const result = await campaignService.getAllCampaigns(filters);
+
+//     return res.status(validationStatus.ok).json(
+//         new ApiResponse(validationStatus.ok, result, "Campaigns fetched successfully")
+//     );
+// });
+
+/**
+ * GET /campaigns
+ * Brands:      see their own campaigns (all statuses)
+ * Influencers: see active campaigns from complete brands only
+ * Admin:       see all active campaigns
+ */
+const getAllCampaigns = AsyncHandler(async (req, res) => {
+    const { status, search, page, limit, industry, platform } = req.query;
+    const userId = req.user?._id;
+    const role = req.user?.role;
+
     const filters = {
-        brand: req.user?.role === "brand" ? userId : null,
-        status,
+        role,
+        brand: role === "brand" ? userId : null,
+        status: role === "influencer" ? "active" : status,
         search,
         page,
         limit,
+        industry,
+        platform,
     };
 
-    const result = await campaignService.getAllCampaigns(filters);
-
+    const data = await campaignService.getAllCampaigns(filters);
     return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, result, "Campaigns fetched successfully")
+        new ApiResponse(validationStatus.ok, data, "Campaigns fetched successfully")
     );
 });
+
+
+// // ADD this new controller for apply:
+// const applyToCampaign = AsyncHandler(async (req, res) => {
+//     const { campaignId } = req.params;
+//     const influencerId = req.user._id;
+//     const { note, proposedBudget, deliveryDays } = req.body;
+
+//     if (!deliveryDays) {
+//         throw new ApiError(validationStatus.badRequest, "Delivery days is required");
+//     }
+
+//     // Get campaign to find the brand (receiver)
+//     const campaign = await Campaign.findOne({ _id: campaignId, isDeleted: false });
+//     if (!campaign) {
+//         throw new ApiError(validationStatus.notFound, "Campaign not found");
+//     }
+
+//     if (campaign.status !== "active") {
+//         throw new ApiError(validationStatus.badRequest, "This campaign is not accepting applications");
+//     }
+
+//     // Check if already applied
+//     const existing = await CollaborationRequest.findOne({
+//         sender: influencerId,
+//         campaign: campaignId,
+//         status: "pending",
+//     });
+//     if (existing) {
+//         throw new ApiError(validationStatus.badRequest, "You have already applied to this campaign");
+//     }
+
+//     const request = await CollaborationRequest.create({
+//         initiatedBy: "influencer",
+//         sender: influencerId,
+//         receiver: campaign.brand, // brand's userId
+//         campaign: campaignId,
+//         proposedBudget: proposedBudget || campaign.budget.min,
+//         note: note || "",
+//         deliveryDays,
+//         status: "pending",
+//     });
+
+//     await emitActivity({
+//         user: influencerId,
+//         role: "influencer",
+//         type: "collaboration_request_sent",
+//         title: "Applied to campaign",
+//         description: `You applied to "${campaign.name}"`,
+//         relatedId: request._id,
+//     });
+
+//     return res
+//         .status(201)
+//         .json(new ApiResponse(201, request, "Application sent successfully"));
+// });
+
+/**
+ * POST /campaigns/:campaignId/apply
+ * Influencer applies to a campaign — creates a CollaborationRequest
+ * requireProfileComplete middleware runs before this controller
+ */
+const applyToCampaign = AsyncHandler(async (req, res) => {
+    const { campaignId } = req.params;
+    const influencerId = req.user._id;
+    const { note, proposedBudget } = req.body;
+
+    const campaign = await Campaign.findOne({ _id: campaignId, isDeleted: false });
+    if (!campaign) {
+        throw new ApiError(validationStatus.notFound, "Campaign not found");
+    }
+
+    if (campaign.status !== "active") {
+        throw new ApiError(validationStatus.badRequest, "This campaign is not accepting applications");
+    }
+
+    if (!campaign.brand) {
+        throw new ApiError(validationStatus.badRequest, "This campaign is not linked to a valid brand.");
+    }
+
+    // Prevent duplicate applications
+    const existing = await CollaborationRequest.findOne({
+        sender: influencerId,
+        campaign: campaignId,
+        status: "pending",
+    });
+    if (existing) {
+        throw new ApiError(validationStatus.conflict, "You have already applied to this campaign");
+    }
+    
+    // Handle Portfolio Upload
+    let uploadedPortfolio = "";
+    if (req.files?.portfolio?.[0]?.path) {
+        const uploadedFile = await uploadOnCloudinary(req.files.portfolio[0].path);
+        uploadedPortfolio = uploadedFile?.url || "";
+    }
+
+    let request;
+    try {
+        request = await CollaborationRequest.create({
+            initiatedBy: "influencer",
+            sender: influencerId,
+            receiver: campaign.brand,   // brand's user ID
+            campaign: campaignId,
+            proposedBudget: proposedBudget || "",
+            note: note || "",
+            attachments: uploadedPortfolio ? [uploadedPortfolio] : [],
+            status: "pending",
+            deliverables: [],           // Explicitly empty array to avoid sub-validation issues
+        });
+    } catch (err) {
+        if (err.code === 11000) {
+            throw new ApiError(validationStatus.conflict, "You have already applied to this campaign");
+        }
+        throw err;
+    }
+
+    await emitActivity({
+        user: influencerId,
+        role: "influencer",
+        type: "collaboration_request_sent",
+        title: "Applied to campaign",
+        description: `You applied to "${campaign.name}"`,
+        relatedId: request._id,
+    });
+
+    return res.status(validationStatus.created).json(
+        new ApiResponse(validationStatus.created, request, "Application sent successfully")
+    );
+});
+
 
 /**
  * Handle fetching a single campaign
@@ -137,4 +298,5 @@ export const campaignController = {
     getCampaign,
     updateCampaign,
     deleteCampaign,
+    applyToCampaign,
 };

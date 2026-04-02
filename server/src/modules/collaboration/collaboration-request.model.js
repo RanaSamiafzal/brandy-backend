@@ -19,8 +19,9 @@ const CollaborationRequestSchema = new mongoose.Schema({
     ref: "Campaign"
   },
   proposedBudget: {
-    type: Number,
-    default: null,
+    type: String,
+    default: "",
+    trim: true,
   },
   note: {
     type: String,
@@ -34,7 +35,7 @@ const CollaborationRequestSchema = new mongoose.Schema({
   },
   deliveryDays: {
     type: String,
-    required: true
+    default: "",
   },
   attachments: [
     {

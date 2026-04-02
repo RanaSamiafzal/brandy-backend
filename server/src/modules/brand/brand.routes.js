@@ -6,16 +6,14 @@ import { verifyJwt } from "../../middleware/authMiddleware.js";
 import { roleMiddleware } from "../../middleware/roleMiddleware.js";
 import { upload } from "../../middleware/multerMiddleware.js";
 
+
 const router = Router();
+
+router.get("/public-list", brandController.getPublicBrandList);
+router.get("/:brandId/public", brandController.getBrandPublicProfile);
 
 router.use(verifyJwt, roleMiddleware(["brand"]));
 
-router.get("/dashboard", brandController.getBrandDashboard);
-router.get("/influencers", brandController.getBrandInfluencers);
-router.get("/influencers/:id", brandController.getBrandInfluencer);
-router.get("/activity", brandController.getBrandActivity);
-router.patch("/activity/:id/read", brandController.markActivityAsRead);
-router.delete("/activity/:id", brandController.deleteActivity);
 router.get("/profile", brandController.getBrandProfile);
 
 router.patch(
@@ -25,4 +23,14 @@ router.patch(
     brandController.updateBrandProfile
 );
 
+router.get("/dashboard", brandController.getBrandDashboard);
+router.get("/influencers", brandController.getBrandInfluencers);
+router.get("/influencers/:id", brandController.getBrandInfluencer);
+router.get("/activity", brandController.getBrandActivity);
+router.patch("/activity/:id/read", brandController.markActivityAsRead);
+router.delete("/activity/:id", brandController.deleteActivity);
+
+
 export default router;
+
+

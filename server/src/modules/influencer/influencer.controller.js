@@ -3,6 +3,7 @@ import { AsyncHandler } from "../../utils/Asynchandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
+import { checkAndMarkComplete, getCompletionStatus } from "../../utils/profileCompletion.js";
 
 /**
  * Get influencer dashboard
@@ -27,18 +28,44 @@ const getInfluencerProfile = AsyncHandler(async (req, res) => {
 /**
  * Update influencer profile
  */
+// const updateInfluencerProfile = AsyncHandler(async (req, res) => {
+//     const updateData = { ...req.body };
+//     if (req.files?.profilePicture?.[0]?.path) {
+//         const upload = await uploadOnCloudinary(req.files.profilePicture[0].path);
+//         if (upload) updateData.profilePicture = upload.url;
+//     }
+
+//     const influencer = await influencerService.updateProfile(req.user._id, updateData);
+//     return res.status(validationStatus.ok).json(
+//         new ApiResponse(validationStatus.ok, influencer, "Influencer profile updated successfully")
+//     );
+// });
+
+
+/**
+ * PATCH /influencers/update-profile
+ * Saves bio, username, category, platforms, services, location, portfolio
+ * Runs completion check after every save
+ */
 const updateInfluencerProfile = AsyncHandler(async (req, res) => {
     const updateData = { ...req.body };
+
     if (req.files?.profilePicture?.[0]?.path) {
         const upload = await uploadOnCloudinary(req.files.profilePicture[0].path);
-        if (upload) updateData.profilePicture = upload.url;
+        if (upload?.url) updateData.profilePicture = upload.url;
     }
 
     const influencer = await influencerService.updateProfile(req.user._id, updateData);
+
+    // Always re-evaluate after save
+    await checkAndMarkComplete(req.user._id, "influencer");
+    const completion = await getCompletionStatus(req.user._id, "influencer");
+
     return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, influencer, "Influencer profile updated successfully")
+        new ApiResponse(validationStatus.ok, { influencer, completion }, "Profile updated successfully")
     );
 });
+
 
 /**
  * Search influences
