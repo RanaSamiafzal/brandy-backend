@@ -5,6 +5,8 @@ import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { emitActivity } from "../../utils/activityUtils.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
+import Campaign from "./campaign.model.js";
+import CollaborationRequest from "../collaboration/collaboration-request.model.js";
 
 /**
  * Handle campaign creation
@@ -159,11 +161,7 @@ const getAllCampaigns = AsyncHandler(async (req, res) => {
 const applyToCampaign = AsyncHandler(async (req, res) => {
     const { campaignId } = req.params;
     const influencerId = req.user._id;
-    const { note, proposedBudget, deliveryDays } = req.body;
-
-    if (!deliveryDays) {
-        throw new ApiError(validationStatus.badRequest, "Delivery days is required");
-    }
+    const { note, proposedBudget } = req.body;
 
     const campaign = await Campaign.findOne({ _id: campaignId, isDeleted: false });
     if (!campaign) {
@@ -183,15 +181,22 @@ const applyToCampaign = AsyncHandler(async (req, res) => {
     if (existing) {
         throw new ApiError(validationStatus.conflict, "You have already applied to this campaign");
     }
+    
+    // Handle Portfolio Upload
+    let uploadedPortfolio = "";
+    if (req.files?.portfolio?.[0]?.path) {
+        const uploadedFile = await uploadOnCloudinary(req.files.portfolio[0].path);
+        uploadedPortfolio = uploadedFile?.url || "";
+    }
 
     const request = await CollaborationRequest.create({
         initiatedBy: "influencer",
         sender: influencerId,
         receiver: campaign.brand,   // brand's user ID
         campaign: campaignId,
-        proposedBudget: proposedBudget ? Number(proposedBudget) : campaign.budget?.min || 0,
+        proposedBudget: proposedBudget || "",
         note: note || "",
-        deliveryDays: String(deliveryDays),
+        attachments: uploadedPortfolio ? [uploadedPortfolio] : [],
         status: "pending",
     });
 

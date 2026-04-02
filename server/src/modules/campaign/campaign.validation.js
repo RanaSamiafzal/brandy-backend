@@ -67,8 +67,14 @@ const campaignQuerySchema = Joi.object({
     limit: Joi.number().min(1).max(100).default(10),
 });
 
+const applyToCampaignSchema = Joi.object({
+    proposedBudget: Joi.string().allow('').trim(),
+    note: Joi.string().allow('').trim().max(500).required(),
+});
+
 export const campaignValidation = {
     campaignCreateSchema,
     campaignUpdateSchema,
     campaignQuerySchema,
+    applyToCampaignSchema,
 };

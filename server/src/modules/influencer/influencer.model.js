@@ -13,6 +13,10 @@ const InfluencerSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    followersCount: {
+      type: Number,
+      default: 0,
+    },
     username: {
       type: String,
       required: true,

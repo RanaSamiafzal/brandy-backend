@@ -1,4 +1,5 @@
 import Campaign from "./campaign.model.js";
+import mongoose from "mongoose";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 
@@ -257,7 +258,7 @@ const getAllCampaigns = async ({
     // ── VISIBILITY GATE: only show campaigns from complete, non-blocked brands
     {
       $match: {
-        "brandUser.profileComplete": true,
+        // "brandUser.profileComplete": true,
         "brandUser.isBlocked": false,
       },
     },
@@ -273,6 +274,21 @@ const getAllCampaigns = async ({
     },
     { $unwind: { path: "$brandProfile", preserveNullAndEmptyArrays: true } },
 
+    // Join CollaborationRequest to get dynamic applicant count
+    {
+      $lookup: {
+        from: "collaborationrequests",
+        localField: "_id",
+        foreignField: "campaign",
+        as: "applicants",
+      },
+    },
+    {
+      $addFields: {
+        applicantsCount: { $size: "$applicants" }
+      }
+    },
+
     {
       $project: {
         name: 1,
@@ -286,6 +302,9 @@ const getAllCampaigns = async ({
         targetAudience: 1,
         deliverables: 1,
         additionalRequirements: 1,
+        goals: 1,
+        competitionLevel: 1,
+        applicantsCount: 1,
         createdAt: 1,
         brand: 1,
         "brandProfile.brandname": 1,
@@ -334,11 +353,16 @@ const getCampaignById = async (campaignId) => {
     throw new ApiError(validationStatus.notFound, "Campaign not found");
   }
 
-  // Recalculate status only if not a draft
   if (campaign.status !== 'draft') {
     const { startDate, endDate } = campaign.campaignTimeline || {};
     campaign.status = calculateStatus(startDate, endDate);
   }
+
+  // Dynamic applicant count for single view
+  const CollaborationRequest = mongoose.model("CollaborationRequest"); 
+  campaign.applicantsCount = await CollaborationRequest.countDocuments({
+    campaign: campaignId,
+  });
 
   return campaign;
 };

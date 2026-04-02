@@ -164,10 +164,29 @@ const getPublicProfile = async (brandId) => {
 
     if (!brand.length) throw new ApiError(validationStatus.notFound, "Brand not found");
 
-    // VISIBILITY GATE
-    if (!brand[0].user?.profileComplete) {
-        throw new ApiError(validationStatus.notFound, "This brand profile is not available");
-    }
+    // ── VISIBILITY GATE: Block if profile is not complete ──────────────────
+    // if (!brand[0].user?.profileComplete) {
+    //     throw new ApiError(validationStatus.notFound, "This brand profile is not available yet.");
+    // }
+
+    // Dynamic Counts for Profile
+    const activeCampaignsCount = await Campaign.countDocuments({
+        brand: brand[0].user._id,
+        isDeleted: false,
+        status: "active"
+    });
+
+    const totalCampaignsCount = await Campaign.countDocuments({
+        brand: brand[0].user._id,
+        isDeleted: false
+    });
+
+    const collaborationsCount = await CollaborationRequest.countDocuments({
+        $or: [
+            { sender: brand[0].user._id, status: "accepted" },
+            { receiver: brand[0].user._id, status: "accepted" }
+        ]
+    });
 
     const campaigns = await Campaign.find({
         brand: brand[0].user._id,
@@ -178,7 +197,15 @@ const getPublicProfile = async (brandId) => {
         .limit(10)
         .lean();
 
-    return { brand: brand[0], campaigns };
+    return { 
+        brand: brand[0],
+        campaigns,
+        stats: {
+            activeCampaignsCount,
+            totalCampaignsCount,
+            collaborationsCount
+        }
+    };
 };
 
 
@@ -201,10 +228,10 @@ const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) =>
         },
         { $unwind: "$userDoc" },
 
-        // ── VISIBILITY GATE ───────────────────────────────────────────────────
+        // ── VISIBILITY GATE: Only show brands with profileComplete = true ──
         {
             $match: {
-                "userDoc.profileComplete": true,
+                // "userDoc.profileComplete": true,
                 "userDoc.isBlocked": false,
             },
         },
@@ -236,10 +263,16 @@ const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) =>
                 website: 1,
                 address: 1,
                 budgetRange: 1,
+                followersCount: 1,
+                rating: 1,
+                reviewsCount: 1,
+                socialMedia: 1,
+                lookingFor: 1,
                 createdAt: 1,
                 "userDoc.fullname": 1,
                 "userDoc.profilePic": 1,
                 "userDoc.isVerified": 1,
+                "userDoc.profileComplete": 1,
             },
         },
 

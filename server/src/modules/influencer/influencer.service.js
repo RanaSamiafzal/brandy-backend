@@ -175,7 +175,7 @@ const searchInfluencers = async ({
         // ── VISIBILITY GATE: only complete, non-blocked profiles ──────────────
         {
             $match: {
-                "userDoc.profileComplete": true,
+                // "userDoc.profileComplete": true,
                 "userDoc.isBlocked": false,
             },
         },
@@ -303,12 +303,12 @@ const getInfluencerById = async (influencerId) => {
     const influencer = influencers[0];
 
     // VISIBILITY GATE — profile must be complete to be publicly viewable
-    if (!influencer.user?.profileComplete) {
-        throw new ApiError(
-            validationStatus.notFound,
-            "This influencer's profile is not available"
-        );
-    }
+    // if (!influencer.user?.profileComplete) {
+    //     throw new ApiError(
+    //         validationStatus.notFound,
+    //         "This influencer's profile is not available."
+    //     );
+    // }
 
     const totalFollowers = influencer.platforms.reduce(
         (acc, p) => acc + (p.followers || 0),

@@ -41,6 +41,32 @@ const BrandSchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+        followersCount: {
+            type: Number,
+            default: 0,
+        },
+        rating: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 5,
+        },
+        reviewsCount: {
+            type: Number,
+            default: 0,
+        },
+        socialMedia: {
+            instagram: { type: String, default: "" },
+            tiktok: { type: String, default: "" },
+            twitter: { type: String, default: "" },
+            linkedin: { type: String, default: "" },
+        },
+        lookingFor: [
+            {
+                type: String,
+                trim: true,
+            }
+        ],
     },
     {
         timestamps: true,
