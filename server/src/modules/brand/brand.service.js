@@ -132,8 +132,9 @@ const updateProfile = async (userId, updateData) => {
     const brand = await Brand.findOneAndUpdate(
         { user: userId },
         { $set: updateData },
-        { new: true }
+        { new: true, upsert: true, setDefaultsOnInsert: true }
     );
+    console.log("Updated/Created Brand:", brand);
     if (!brand) {
         throw new ApiError(validationStatus.notFound, "Brand profile not found");
     }
@@ -149,8 +150,19 @@ const updateProfile = async (userId, updateData) => {
  * VISIBILITY GATED: 404 if profileComplete = false
  */
 const getPublicProfile = async (brandId) => {
+    if (!mongoose.Types.ObjectId.isValid(brandId)) {
+        throw new ApiError(validationStatus.badRequest, "Invalid brand identifier");
+    }
+
     const brand = await Brand.aggregate([
-        { $match: { _id: new mongoose.Types.ObjectId(brandId) } },
+        { 
+            $match: { 
+                $or: [
+                    { _id: new mongoose.Types.ObjectId(brandId) },
+                    { user: new mongoose.Types.ObjectId(brandId) }
+                ]
+            } 
+        },
         { $lookup: { from: "users", localField: "user", foreignField: "_id", as: "user" } },
         { $unwind: "$user" },
         {

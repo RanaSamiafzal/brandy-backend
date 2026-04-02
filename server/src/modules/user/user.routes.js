@@ -26,4 +26,7 @@ router.patch(
   userController.updateProfile
 );
 
+// PATCH /users/status — update active/offline status
+router.patch("/status", userController.updateStatus);
+
 export default router;

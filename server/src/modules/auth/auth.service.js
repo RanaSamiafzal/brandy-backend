@@ -4,6 +4,8 @@ import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { sendEmail } from "../../utils/email.js";
+import Brand from "../brand/brand.model.js";
+import Influencer from "../influencer/influencer.model.js";
 
 /**
  * Generate Access and Refresh Tokens
@@ -43,6 +45,28 @@ const register = async (userData) => {
 
     if (!safeUser) {
         throw new ApiError(validationStatus.internalError, "Error registering the user");
+    }
+
+    // Role-specific profile initialization
+    // (We use default values for required fields or expect the user to fill them on first save)
+    try {
+        if (userData.role === "brand") {
+            await Brand.create({
+                user: newUser._id,
+                brandname: userData.fullname || "My Brand", // Initial placeholder
+                budgetRange: { min: 0, max: 0 }           // Initial placeholder
+            });
+        } else if (userData.role === "influencer") {
+            await Influencer.create({
+                user: newUser._id,
+                username: userData.fullname?.toLowerCase().replace(/\s+/g, "") || `user${newUser._id.toString().slice(-4)}`,
+                about: `Hi, I'm ${userData.fullname}` // Initial placeholder
+            });
+        }
+    } catch (err) {
+        console.error("Error creating role profile on registration:", err);
+        // We don't throw error here to avoid blocking registration if profile creation fails
+        // The upsert on first save will act as a fallback
     }
 
     return safeUser;

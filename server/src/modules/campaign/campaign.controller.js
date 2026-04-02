@@ -172,6 +172,10 @@ const applyToCampaign = AsyncHandler(async (req, res) => {
         throw new ApiError(validationStatus.badRequest, "This campaign is not accepting applications");
     }
 
+    if (!campaign.brand) {
+        throw new ApiError(validationStatus.badRequest, "This campaign is not linked to a valid brand.");
+    }
+
     // Prevent duplicate applications
     const existing = await CollaborationRequest.findOne({
         sender: influencerId,
@@ -189,16 +193,25 @@ const applyToCampaign = AsyncHandler(async (req, res) => {
         uploadedPortfolio = uploadedFile?.url || "";
     }
 
-    const request = await CollaborationRequest.create({
-        initiatedBy: "influencer",
-        sender: influencerId,
-        receiver: campaign.brand,   // brand's user ID
-        campaign: campaignId,
-        proposedBudget: proposedBudget || "",
-        note: note || "",
-        attachments: uploadedPortfolio ? [uploadedPortfolio] : [],
-        status: "pending",
-    });
+    let request;
+    try {
+        request = await CollaborationRequest.create({
+            initiatedBy: "influencer",
+            sender: influencerId,
+            receiver: campaign.brand,   // brand's user ID
+            campaign: campaignId,
+            proposedBudget: proposedBudget || "",
+            note: note || "",
+            attachments: uploadedPortfolio ? [uploadedPortfolio] : [],
+            status: "pending",
+            deliverables: [],           // Explicitly empty array to avoid sub-validation issues
+        });
+    } catch (err) {
+        if (err.code === 11000) {
+            throw new ApiError(validationStatus.conflict, "You have already applied to this campaign");
+        }
+        throw err;
+    }
 
     await emitActivity({
         user: influencerId,

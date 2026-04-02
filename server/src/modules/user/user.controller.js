@@ -78,8 +78,21 @@ const updateProfile = AsyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * PATCH /users/status
+ * Updates the user's activity status (active, offline)
+ */
+const updateStatus = AsyncHandler(async (req, res) => {
+    const { status } = req.body;
+    const user = await userService.updateUserProfile(req.user._id, { status });
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, user, "Status updated successfully")
+    );
+});
+
 export const userController = {
     getProfile,
     updateProfile,
     getMe,
+    updateStatus,
 };

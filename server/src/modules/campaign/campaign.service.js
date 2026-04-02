@@ -347,7 +347,9 @@ const getAllCampaigns = async ({
  * Get a single campaign by ID
  */
 const getCampaignById = async (campaignId) => {
-  const campaign = await Campaign.findOne({ _id: campaignId, isDeleted: false }).lean();
+  const campaign = await Campaign.findOne({ _id: campaignId, isDeleted: false })
+    .populate("brand", "fullname profilePic coverPic")
+    .lean();
 
   if (!campaign) {
     throw new ApiError(validationStatus.notFound, "Campaign not found");

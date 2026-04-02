@@ -64,7 +64,7 @@ const updateProfile = async (userId, updateData) => {
     const updatedInfluencer = await Influencer.findOneAndUpdate(
         { user: userId },
         { $set: updateData },
-        { new: true }
+        { new: true, upsert: true, setDefaultsOnInsert: true }
     );
     if (!updatedInfluencer) {
         throw new ApiError(validationStatus.notFound, "Influencer profile not found");

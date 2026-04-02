@@ -109,6 +109,7 @@ const updateBrandProfile = AsyncHandler(async (req, res) => {
     }
 
     const brand = await brandService.updateProfile(req.user._id, updateData);
+    console.log(brand);
 
     await checkAndMarkComplete(req.user._id, "brand");
     const completion = await getCompletionStatus(req.user._id, "brand");
