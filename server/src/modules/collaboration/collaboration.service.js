@@ -118,6 +118,31 @@ const getRequests = async (userId, { status, page = 1, limit = 10 }) => {
                 influencerDetails: { $arrayElemAt: ["$influencerProfile", 0] },
             },
         },
+        // Join with Brand Profile (for whoever is the brand)
+        {
+            $lookup: {
+                from: "brands",
+                let: { senderId: "$sender", receiverId: "$receiver" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $or: [
+                                    { $eq: ["$user", "$$senderId"] },
+                                    { $eq: ["$user", "$$receiverId"] },
+                                ],
+                            },
+                        },
+                    },
+                ],
+                as: "brandProfile",
+            },
+        },
+        {
+            $addFields: {
+                brandDetails: { $arrayElemAt: ["$brandProfile", 0] },
+            },
+        },
         // Sort and Page
         { $sort: { createdAt: -1 } },
         {

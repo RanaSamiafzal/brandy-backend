@@ -160,10 +160,20 @@ const searchInfluencers = async ({
 
     const pipeline = [
         { $match: matchStage },
-        { $unwind: "$platforms" },
+        // Add lookup for User table to retrieve their actual profilePic
+        {
+            $lookup: {
+                from: "users",
+                localField: "user",
+                foreignField: "_id",
+                as: "userDetails"
+            }
+        },
+        { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: "$platforms", preserveNullAndEmptyArrays: true } },
         ...(platform ? [{ $match: { "platforms.name": platform } }] : []),
         ...(minFollowers ? [{ $match: { "platforms.followers": { $gte: Number(minFollowers) } } }] : []),
-        { $unwind: "$platforms.services" },
+        { $unwind: { path: "$platforms.services", preserveNullAndEmptyArrays: true } },
         ...(minPrice || maxPrice ? [{
             $match: {
                 "platforms.services.price": {
@@ -176,12 +186,13 @@ const searchInfluencers = async ({
             $group: {
                 _id: "$_id",
                 username: { $first: "$username" },
-                profilePicture: { $first: "$profilePicture" },
+                profilePicture: { $first: { $cond: [{ $ifNull: ["$profilePicture", false] }, "$profilePicture", "$userDetails.profilePic"] } },
                 category: { $first: "$category" },
                 averageRating: { $first: "$averageRating" },
                 location: { $first: "$location" },
                 platforms: { $push: "$platforms" },
                 minPrice: { $min: "$platforms.services.price" },
+                createdAt: { $first: "$createdAt" },
             }
         },
         sort === "rating_desc" ? { $sort: { averageRating: -1 } } : { $sort: { createdAt: -1 } },
@@ -199,15 +210,9 @@ const searchInfluencers = async ({
 
     return {
         influencers,
-        total,
+        total: totalCount,
         page: Number(page),
-        pages: Math.ceil(total / limit),
-        _debug: {
-            totalUsersInSystem,
-            influencersStrictMatch,
-            influencersRegexMatch,
-            queryUsed: findQuery
-        }
+        pages: Math.ceil(totalCount / Number(limit)),
     };
 };
 
