@@ -16,29 +16,61 @@ const getDashboardStats = async (userId) => {
     if (!brand) {
         throw new ApiError(validationStatus.notFound, "Brand profile not found");
     }
-    const brandId = brand._id;
+
+    const now = new Date();
 
     const campaignStats = await Campaign.aggregate([
-        { $match: { brand: brandId } },
+        { 
+            $match: { 
+                brand: new mongoose.Types.ObjectId(userId), 
+                isDeleted: false 
+            } 
+        },
+        {
+            $project: {
+                status: 1,
+                startDate: "$campaignTimeline.startDate",
+                endDate: "$campaignTimeline.endDate",
+                // Calculate dynamic status for the aggregation
+                dynamicStatus: {
+                    $cond: [
+                        { $eq: ["$status", "draft"] }, "draft",
+                        {
+                            $cond: [
+                                { $lt: [now, "$campaignTimeline.startDate"] }, "pending",
+                                {
+                                    $cond: [
+                                        { $gt: [now, "$campaignTimeline.endDate"] }, "completed",
+                                        "active"
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
         {
             $group: {
                 _id: null,
                 totalCampaigns: { $sum: 1 },
-                activeCampaigns: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } },
-                completedCampaigns: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
+                activeCampaigns: { $sum: { $cond: [{ $eq: ["$dynamicStatus", "active"] }, 1, 0] } },
+                completedCampaigns: { $sum: { $cond: [{ $eq: ["$dynamicStatus", "completed"] }, 1, 0] } },
+                pendingCampaigns: { $sum: { $cond: [{ $eq: ["$dynamicStatus", "pending"] }, 1, 0] } },
             },
         },
     ]);
 
     const collaborationStats = await CollaborationRequest.aggregate([
-        { $match: { sender: userId } },
+        { $match: { $or: [{ sender: new mongoose.Types.ObjectId(userId) }, { receiver: new mongoose.Types.ObjectId(userId) }] } },
         {
             $group: {
                 _id: null,
                 totalRequests: { $sum: 1 },
                 acceptedRequests: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
                 pendingRequests: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
-                totalInfluencersContacted: { $addToSet: "$receiver" },
+                senders: { $addToSet: "$sender" },
+                receivers: { $addToSet: "$receiver" },
             },
         },
         {
@@ -46,24 +78,32 @@ const getDashboardStats = async (userId) => {
                 totalRequests: 1,
                 acceptedRequests: 1,
                 pendingRequests: 1,
-                totalInfluencersContacted: { $size: "$totalInfluencersContacted" },
+                totalInfluencersContacted: {
+                    $size: {
+                        $setDifference: [
+                            { $setUnion: ["$senders", "$receivers"] },
+                            [new mongoose.Types.ObjectId(userId)]
+                        ]
+                    }
+                }
             },
         },
     ]);
 
-    const recentCampaigns = await Campaign.find({ brand: brandId })
+    const recentCampaigns = await Campaign.find({ brand: userId, isDeleted: false })
         .sort({ createdAt: -1 })
         .limit(5)
         .select("name status createdAt")
         .lean();
 
-    const campaignData = campaignStats[0] || { totalCampaigns: 0, activeCampaigns: 0, completedCampaigns: 0 };
+    const campaignData = campaignStats[0] || { totalCampaigns: 0, activeCampaigns: 0, completedCampaigns: 0, pendingCampaigns: 0 };
     const collaborationData = collaborationStats[0] || { totalRequests: 0, acceptedRequests: 0, pendingRequests: 0, totalInfluencersContacted: 0 };
 
     return {
         totalCampaigns: campaignData.totalCampaigns,
         activeCampaigns: campaignData.activeCampaigns,
         completedCampaigns: campaignData.completedCampaigns,
+        pendingCampaigns: campaignData.pendingCampaigns,
         totalRequests: collaborationData.totalRequests,
         acceptedRequests: collaborationData.acceptedRequests,
         pendingRequests: collaborationData.pendingRequests,

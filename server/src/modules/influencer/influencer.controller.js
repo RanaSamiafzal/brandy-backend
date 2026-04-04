@@ -55,6 +55,11 @@ const updateInfluencerProfile = AsyncHandler(async (req, res) => {
         if (upload?.url) updateData.profilePicture = upload.url;
     }
 
+    if (req.files?.coverImage?.[0]?.path) {
+        const upload = await uploadOnCloudinary(req.files.coverImage[0].path);
+        if (upload?.url) updateData.coverImage = upload.url;
+    }
+
     const influencer = await influencerService.updateProfile(req.user._id, updateData);
 
     // Always re-evaluate after save

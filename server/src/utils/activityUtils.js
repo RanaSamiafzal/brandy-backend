@@ -22,7 +22,7 @@ const emitActivity = async ({ user, role, type, title, description, relatedId = 
             title,
             description,
             relatedId,
-            category
+            category: category || 'system'
         });
         
         // FUTURE: Socket.io emission would go here

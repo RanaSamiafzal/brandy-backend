@@ -38,6 +38,7 @@ const createCampaign = AsyncHandler(async (req, res) => {
         title: "New Campaign Created",
         description: `You created a new campaign: ${campaign.name}`,
         relatedId: campaign._id,
+        category: 'application'
     });
 
     return res.status(validationStatus.created).json(
@@ -176,11 +177,16 @@ const applyToCampaign = AsyncHandler(async (req, res) => {
         throw new ApiError(validationStatus.badRequest, "This campaign is not linked to a valid brand.");
     }
 
+    // Budget Validation
+    if (proposedBudget && campaign.budget?.min && Number(proposedBudget) < campaign.budget.min) {
+        throw new ApiError(validationStatus.badRequest, `Your proposed budget must be equal or greater than the minimum budget of the campaign ($${campaign.budget.min})`);
+    }
+
     // Prevent duplicate applications
     const existing = await CollaborationRequest.findOne({
         sender: influencerId,
         campaign: campaignId,
-        status: "pending",
+        status: { $in: ["pending", "accepted"] },
     });
     if (existing) {
         throw new ApiError(validationStatus.conflict, "You have already applied to this campaign");
@@ -220,6 +226,7 @@ const applyToCampaign = AsyncHandler(async (req, res) => {
         title: "Applied to campaign",
         description: `You applied to "${campaign.name}"`,
         relatedId: request._id,
+        category: 'application'
     });
 
     return res.status(validationStatus.created).json(
@@ -263,6 +270,7 @@ const updateCampaign = AsyncHandler(async (req, res) => {
         title: "Campaign Updated",
         description: `You updated the campaign: ${updatedCampaign.name}`,
         relatedId: updatedCampaign._id,
+        category: 'application'
     });
 
     return res.status(validationStatus.ok).json(
@@ -285,6 +293,7 @@ const deleteCampaign = AsyncHandler(async (req, res) => {
         title: "Campaign Deleted",
         description: `You deleted the campaign: ${deletedCampaign.name}`,
         relatedId: deletedCampaign._id,
+        category: 'application'
     });
 
     return res.status(validationStatus.ok).json(
