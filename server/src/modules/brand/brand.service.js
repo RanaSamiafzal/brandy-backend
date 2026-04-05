@@ -284,7 +284,8 @@ const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) =>
         {
             $match: {
                 // "userDoc.profileComplete": true,
-                "userDoc.isBlocked": false,
+                "userDoc.isBlocked": { $ne: true },
+                "userDoc.isDeactivated": { $ne: true },
             },
         },
 

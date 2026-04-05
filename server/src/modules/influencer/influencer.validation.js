@@ -17,6 +17,8 @@ const updateProfileSchema = Joi.object({
         })),
     })),
     portfolio: Joi.string().uri().allow(''),
+    resume: Joi.any().allow(''),
+    recentWork: Joi.any(),
     location: Joi.string().trim().allow(''),
     isAvailable: Joi.boolean(),
 });

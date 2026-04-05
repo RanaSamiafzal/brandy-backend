@@ -60,6 +60,37 @@ const updateInfluencerProfile = AsyncHandler(async (req, res) => {
         if (upload?.url) updateData.coverImage = upload.url;
     }
 
+    if (req.files?.resume?.[0]?.path) {
+        const upload = await uploadOnCloudinary(req.files.resume[0].path);
+        if (upload?.url) updateData.resume = upload.url;
+    }
+
+    if (typeof updateData.recentWork === "string") {
+        try {
+            updateData.recentWork = JSON.parse(updateData.recentWork);
+        } catch (e) {
+            delete updateData.recentWork;
+        }
+    }
+
+    // Handle nested socialMedia object from FormData e.g. socialMedia[instagram]
+    const socialMedia = {};
+    const socialPlatforms = ["instagram", "tiktok", "twitter", "linkedin", "youtube"];
+    let hasSocial = false;
+
+    socialPlatforms.forEach(p => {
+        const key = `socialMedia[${p}]`;
+        if (updateData[key] !== undefined) {
+            socialMedia[p] = updateData[key];
+            delete updateData[key];
+            hasSocial = true;
+        }
+    });
+
+    if (hasSocial) {
+        updateData.socialMedia = socialMedia;
+    }
+
     const influencer = await influencerService.updateProfile(req.user._id, updateData);
 
     // Always re-evaluate after save

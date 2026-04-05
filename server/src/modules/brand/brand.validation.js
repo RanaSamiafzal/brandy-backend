@@ -10,6 +10,9 @@ const updateProfileSchema = Joi.object({
     website: Joi.string().uri().allow(''),
     address: Joi.string().trim().allow(''),
     description: Joi.string().trim().max(1000).allow(''),
+    lookingFor: Joi.any(),
+    lookingForClear: Joi.any(),
+    socialMedia: Joi.any(),
 });
 
 export const brandValidation = {

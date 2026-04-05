@@ -14,7 +14,8 @@ const cookieOptions = {
  * Handle user registration
  */
 const register = AsyncHandler(async (req, res) => {
-    const { fullname, email, password, role } = req.body;
+    let { fullname, email, password, role } = req.body;
+    if (email) email = email.toLowerCase().trim();
 
     const userData = {
         fullname,
@@ -44,7 +45,8 @@ const register = AsyncHandler(async (req, res) => {
  * Handle user login
  */
 const login = AsyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+    if (email) email = email.toLowerCase().trim();
     const { user, accessToken, refreshToken } = await authService.login(email, password);
 
     return res
@@ -92,7 +94,9 @@ const refresh = AsyncHandler(async (req, res) => {
  * Handle forgot password request
  */
 const forgotPassword = AsyncHandler(async (req, res) => {
-    await authService.forgotPassword(req.body.email);
+    let email = req.body.email;
+    if (email) email = email.toLowerCase().trim();
+    await authService.forgotPassword(email);
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, {}, "If account exists, OTP has been sent.")
     );
@@ -102,10 +106,25 @@ const forgotPassword = AsyncHandler(async (req, res) => {
  * Handle password reset
  */
 const resetPassword = AsyncHandler(async (req, res) => {
-    const { email, otp, password } = req.body;
+    let { email, otp, password } = req.body;
+    if (email) email = email.toLowerCase().trim();
     await authService.resetPassword(email, otp, password);
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, {}, "Password reset successfully")
+    );
+});
+
+/**
+ * Change Password
+ */
+const changePassword = AsyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    const userId = req.user?._id;
+
+    await authService.changePassword(userId, oldPassword, newPassword);
+
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {}, "Password changed successfully")
     );
 });
 
@@ -116,4 +135,5 @@ export const authController = {
     refresh,
     forgotPassword,
     resetPassword,
+    changePassword,
 };

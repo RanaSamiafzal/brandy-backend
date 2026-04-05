@@ -82,11 +82,34 @@ const InfluencerSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    resume: {
+      type: String,
+      default: "",
+    },
+    recentWork: [
+      {
+        title: { type: String, required: true },
+        brandName: { type: String, required: true },
+        description: { type: String, default: "" },
+        link: { type: String, default: "" },
+      }
+    ],
     averageRating: {
       type: Number,
       default: 0,
       min: 0,
       max: 5,
+    },
+    reviewsCount: {
+      type: Number,
+      default: 0,
+    },
+    socialMedia: {
+      instagram: { type: String, default: "" },
+      tiktok: { type: String, default: "" },
+      twitter: { type: String, default: "" },
+      linkedin: { type: String, default: "" },
+      youtube: { type: String, default: "" },
     },
     location: {
       type: String,

@@ -1,6 +1,7 @@
 import Influencer from "./influencer.model.js";
 import User from "../user/user.model.js";
 import CollaborationRequest from "../collaboration/collaboration-request.model.js";
+import Review from "../collaboration/review.model.js";
 import Activity from "../activity/activity.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
@@ -55,7 +56,26 @@ const getProfile = async (userId) => {
     if (!profiles.length) {
         throw new ApiError(validationStatus.notFound, "Influencer profile not found");
     }
-    return profiles[0];
+
+    const influencer = profiles[0];
+
+    // Fetch reviews
+    const reviews = await Review.find({ reviewee: userId, role: "brand" })
+        .populate("reviewer", "fullname profilePic")
+        .sort({ createdAt: -1 })
+        .lean();
+
+    // Fetch active collaborations
+    const activeCollaborations = await CollaborationRequest.find({
+        receiver: userId,
+        status: "accepted"
+    })
+    .populate("sender", "fullname profilePic")
+    .populate("campaign", "name description budgetRange budget")
+    .sort({ createdAt: -1 })
+    .lean();
+
+    return { ...influencer, reviews, activeCollaborations, collaborationCount: activeCollaborations.length };
 };
 
 /**
@@ -170,6 +190,12 @@ const searchInfluencers = async ({
             }
         },
         { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+        { 
+            $match: { 
+                "userDetails.isDeactivated": { $ne: true },
+                "userDetails.isBlocked": { $ne: true } 
+            } 
+        },
         { $unwind: { path: "$platforms", preserveNullAndEmptyArrays: true } },
         ...(platform ? [{ $match: { "platforms.name": platform } }] : []),
         ...(minFollowers ? [{ $match: { "platforms.followers": { $gte: Number(minFollowers) } } }] : []),
@@ -271,20 +297,28 @@ const getInfluencerById = async (influencerId) => {
 
     const influencer = influencers[0];
 
-    // VISIBILITY GATE — profile must be complete to be publicly viewable
-    // if (!influencer.user?.profileComplete) {
-    //     throw new ApiError(
-    //         validationStatus.notFound,
-    //         "This influencer's profile is not available."
-    //     );
-    // }
+    // Fetch reviews
+    const reviews = await Review.find({ reviewee: influencer.user._id, role: "brand" })
+        .populate("reviewer", "fullname profilePic")
+        .sort({ createdAt: -1 })
+        .lean();
 
     const totalFollowers = influencer.platforms.reduce(
         (acc, p) => acc + (p.followers || 0),
         0
     );
 
-    return { influencer, totalFollowers };
+    // Fetch active collaborations
+    const activeCollaborations = await CollaborationRequest.find({
+        receiver: influencer.user._id,
+        status: "accepted"
+    })
+    .populate("sender", "fullname profilePic")
+    .populate("campaign", "name description budgetRange budget")
+    .sort({ createdAt: -1 })
+    .lean();
+
+    return { influencer: { ...influencer, reviews, activeCollaborations }, totalFollowers };
 };
 
 

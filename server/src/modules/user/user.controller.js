@@ -90,9 +90,43 @@ const updateStatus = AsyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * Permanent Delete Account
+ */
+const deleteAccount = AsyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+    await userService.deleteAccount(userId);
+
+    // Clear cookies if logged in
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {}, "Account deleted successfully")
+    );
+});
+
+/**
+ * Deactivate Account
+ */
+const deactivateAccount = AsyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+    await userService.deactivateAccount(userId);
+
+    // Clear cookies
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {}, "Account deactivated successfully")
+    );
+});
+
 export const userController = {
+    getMe,
     getProfile,
     updateProfile,
-    getMe,
     updateStatus,
+    deleteAccount,
+    deactivateAccount,
 };

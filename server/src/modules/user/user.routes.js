@@ -29,4 +29,10 @@ router.patch(
 // PATCH /users/status — update active/offline status
 router.patch("/status", userController.updateStatus);
 
+// DELETE /users — permanent account delete
+router.delete("/", userController.deleteAccount);
+
+// PATCH /users/deactivate — temporary account deactivation
+router.patch("/deactivate", userController.deactivateAccount);
+
 export default router;

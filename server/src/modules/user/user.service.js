@@ -1,4 +1,6 @@
 import User from "./user.model.js";
+import Brand from "../brand/brand.model.js";
+import Influencer from "../influencer/influencer.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { emitActivity } from "../../utils/activityUtils.js";
@@ -56,8 +58,61 @@ const blockUser = async (userId) => {
     return user;
 };
 
+/**
+ * Permanent Delete Account
+ */
+const deleteAccount = async (userId) => {
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new ApiError(validationStatus.notFound, "User not found");
+    }
+
+    // Delete role-specific profiles
+    if (user.role === "brand") {
+        await Brand.deleteOne({ user: userId });
+    } else if (user.role === "influencer") {
+        await Influencer.deleteOne({ user: userId });
+    }
+
+    // Delete user doc
+    await User.findByIdAndDelete(userId);
+};
+
+/**
+ * Deactivate Account
+ */
+const deactivateAccount = async (userId) => {
+    const user = await User.findByIdAndUpdate(
+        userId,
+        { isDeactivated: true },
+        { new: true }
+    );
+    if (!user) {
+        throw new ApiError(validationStatus.notFound, "User not found");
+    }
+    return user;
+};
+
+/**
+ * Activate Account
+ */
+const activateAccount = async (userId) => {
+    const user = await User.findByIdAndUpdate(
+        userId,
+        { isDeactivated: false },
+        { new: true }
+    );
+    if (!user) {
+        throw new ApiError(validationStatus.notFound, "User not found");
+    }
+    return user;
+};
+
 export const userService = {
     getUserById,
     updateUserProfile,
     blockUser,
+    deleteAccount,
+    deactivateAccount,
+    activateAccount,
 };

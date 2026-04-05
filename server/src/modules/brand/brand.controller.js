@@ -103,6 +103,13 @@ const getBrandProfile = AsyncHandler(async (req, res) => {
 const updateBrandProfile = AsyncHandler(async (req, res) => {
     const updateData = { ...req.body };
 
+    if (updateData.lookingForClear) {
+        updateData.lookingFor = [];
+        delete updateData.lookingForClear;
+    } else if (updateData.lookingFor && typeof updateData.lookingFor === "object") {
+        updateData.lookingFor = Object.values(updateData.lookingFor).filter(Boolean);
+    }
+
     if (req.files?.logo?.[0]?.path) {
         const logoUpload = await uploadOnCloudinary(req.files.logo[0].path);
         if (logoUpload?.url) updateData.logo = logoUpload.url;

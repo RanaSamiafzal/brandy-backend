@@ -10,18 +10,18 @@ const router = Router();
 
 router.use(verifyJwt);
 
-// Public search and single view for authenticated users
-router.get("/search", validate(influencerValidation.searchQuerySchema, 'query'), influencerController.getAllInfluencer);
-router.get("/:influencerId", influencerController.getInfluencer);
-
 // Protected dashboard and profile for influencers only
 router.get("/dashboard", roleMiddleware(["influencer"]), influencerController.getInfluencerDashboard);
 router.get("/profile", roleMiddleware(["influencer"]), influencerController.getInfluencerProfile);
 
+// Dynamic routes must be registered last
+router.get("/search", validate(influencerValidation.searchQuerySchema, 'query'), influencerController.getAllInfluencer);
+router.get("/:influencerId", influencerController.getInfluencer);
+
 router.patch(
     "/update-profile",
     roleMiddleware(["influencer"]),
-    upload.fields([{ name: "profilePicture", maxCount: 1 }]),
+    upload.fields([{ name: "profilePicture", maxCount: 1 }, { name: "coverImage", maxCount: 1 }, { name: "resume", maxCount: 1 }]),
     validate(influencerValidation.updateProfileSchema),
     influencerController.updateInfluencerProfile
 );

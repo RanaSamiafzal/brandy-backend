@@ -86,6 +86,12 @@ const login = async (email, password) => {
         throw new ApiError(validationStatus.unauthorized, "Invalid credentials");
     }
 
+    // Auto-reactivate if account was deactivated
+    if (user.isDeactivated) {
+        user.isDeactivated = false;
+        await user.save({ validateBeforeSave: false });
+    }
+
     const tokens = await generateAccessAndRefreshTokens(user._id);
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
@@ -135,11 +141,17 @@ const forgotPassword = async (email) => {
     const otp = user.generatePasswordResetOTP();
     await user.save({ validateBeforeSave: false });
 
-    await sendEmail({
-        to: user.email,
-        subject: "Password Reset OTP - Brandly",
-        html: `<h2>Password Reset OTP</h2><h1>${otp}</h1><p>This OTP expires in 10 minutes.</p>`,
-    });
+    console.log(`\n\n=== DEVELOPMENT OTP FOR ${user.email}: ${otp} ===\n\n`);
+
+    try {
+        await sendEmail({
+            to: user.email,
+            subject: "Password Reset OTP - Brandly",
+            html: `<h2>Password Reset OTP</h2><h1>${otp}</h1><p>This OTP expires in 10 minutes.</p>`,
+        });
+    } catch (err) {
+        console.log("Email could not be sent (SMTP may not be configured). OTP printed in console.");
+    }
 };
 
 /**
@@ -170,6 +182,24 @@ const resetPassword = async (email, otp, newPassword) => {
     await user.save();
 };
 
+/**
+ * Change Password
+ */
+const changePassword = async (userId, oldPassword, newPassword) => {
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new ApiError(validationStatus.notFound, "User not found");
+    }
+
+    const isPasswordValid = await user.isPasswordCorrect(oldPassword);
+    if (!isPasswordValid) {
+        throw new ApiError(validationStatus.badRequest, "Invalid current password");
+    }
+
+    user.password = newPassword;
+    await user.save();
+};
+
 export const authService = {
     register,
     login,
@@ -177,4 +207,5 @@ export const authService = {
     refreshAccessToken,
     forgotPassword,
     resetPassword,
+    changePassword,
 };
