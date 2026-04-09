@@ -147,6 +147,8 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
             },
         },
         { $unwind: { path: "$campaignDetails", preserveNullAndEmptyArrays: true } },
+        // Filter out requests for deleted campaigns
+        { $match: { "campaignDetails.isDeleted": false } },
         // Join with Influencer Profile (for whoever is the influencer)
         {
             $lookup: {
@@ -242,8 +244,24 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
     ]);
 
     // Separate counts for tabs (Sent vs Received)
-    const sentCount = await CollaborationRequest.countDocuments({ sender: userId });
-    const receivedCount = await CollaborationRequest.countDocuments({ receiver: userId });
+    // Separate counts for tabs (Sent vs Received) - Must respect campaign deletion
+    const sentCountResult = await CollaborationRequest.aggregate([
+        { $match: { sender: objectUserId } },
+        { $lookup: { from: "campaigns", localField: "campaign", foreignField: "_id", as: "campaignInfo" } },
+        { $unwind: "$campaignInfo" },
+        { $match: { "campaignInfo.isDeleted": false } },
+        { $count: "count" }
+    ]);
+    const receivedCountResult = await CollaborationRequest.aggregate([
+        { $match: { receiver: objectUserId } },
+        { $lookup: { from: "campaigns", localField: "campaign", foreignField: "_id", as: "campaignInfo" } },
+        { $unwind: "$campaignInfo" },
+        { $match: { "campaignInfo.isDeleted": false } },
+        { $count: "count" }
+    ]);
+
+    const sentCount = sentCountResult[0]?.count || 0;
+    const receivedCount = receivedCountResult[0]?.count || 0;
 
     const requests = result[0].data || [];
     const totalCount = result[0].totalCount[0]?.count || 0;
@@ -261,7 +279,7 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
 };
 
 /**
- * Accept collaboration request
+ * Accept collaboration request - and automatically reject others for the same campaign
  */
 const acceptRequest = async (requestId, userId) => {
     const request = await CollaborationRequest.findById(requestId);
@@ -270,11 +288,48 @@ const acceptRequest = async (requestId, userId) => {
     }
     if (request.status !== "pending") throw new ApiError(validationStatus.badRequest, `Request is already ${request.status}`);
 
+    const campaignId = request.campaign;
+    const campaign = await Campaign.findById(campaignId);
+
+    // 1. Accept this request
     request.status = "accepted";
     request.respondedAt = new Date();
     await request.save();
 
-    const campaign = await Campaign.findById(request.campaign);
+    // 2. Reject ALL other pending requests for this campaign
+    const otherRequests = await CollaborationRequest.find({
+        campaign: campaignId,
+        _id: { $ne: requestId },
+        status: "pending"
+    });
+
+    if (otherRequests.length > 0) {
+        await CollaborationRequest.updateMany(
+            { _id: { $in: otherRequests.map(r => r._id) } },
+            { 
+                $set: { 
+                    status: "rejected", 
+                    rejectionReason: "Another influencer was selected for this campaign",
+                    respondedAt: new Date()
+                } 
+            }
+        );
+
+        // Notify each rejected influencer
+        for (const req of otherRequests) {
+            await emitActivity({
+                user: req.sender,
+                role: "influencer",
+                type: "request_rejected",
+                title: "Request Rejected",
+                description: `Your application for "${campaign?.name || 'a campaign'}" was rejected because another influencer was selected.`,
+                relatedId: req._id,
+                category: "application"
+            });
+        }
+    }
+
+    // 3. Create Collaboration
     const collaboration = await Collaboration.create({
         brand: request.initiatedBy === "brand" ? request.sender : request.receiver,
         influencer: request.initiatedBy === "influencer" ? request.sender : request.receiver,
@@ -286,7 +341,7 @@ const acceptRequest = async (requestId, userId) => {
         status: "active",
     });
 
-    // Emit activity for the sender (the one who initiated the now-accepted request)
+    // 4. Emit activities for the newly started collaboration
     const senderUser = await User.findById(request.sender).select('role');
     await emitActivity({
         user: request.sender,
@@ -294,6 +349,17 @@ const acceptRequest = async (requestId, userId) => {
         type: 'collaboration_accepted',
         title: 'Collaboration Request Accepted',
         description: `Your request for "${campaign?.name || 'a campaign'}" was accepted!`,
+        relatedId: collaboration._id,
+        category: 'collaboration'
+    });
+
+    const receiverUser = await User.findById(request.receiver).select('role');
+    await emitActivity({
+        user: request.receiver,
+        role: receiverUser?.role || (request.initiatedBy === 'brand' ? 'influencer' : 'brand'),
+        type: 'collaboration_started',
+        title: 'Collaboration Started',
+        description: `You accepted the request for "${campaign?.name || 'a campaign'}".`,
         relatedId: collaboration._id,
         category: 'collaboration'
     });
@@ -337,9 +403,280 @@ const updateRequestStatus = async (requestId, userId, status) => {
     return request;
 };
 
+/**
+ * Update active collaboration status (cancel/complete)
+ */
+const updateCollaborationStatus = async (id, userId, status, reason = "") => {
+    const collaboration = await Collaboration.findById(id);
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    const isBrand = collaboration.brand.toString() === userId.toString();
+    const isInfluencer = collaboration.influencer.toString() === userId.toString();
+
+    if (!isBrand && !isInfluencer) {
+        throw new ApiError(validationStatus.forbidden, "Access denied");
+    }
+
+    if (status === "completed" && !isBrand) {
+        throw new ApiError(validationStatus.forbidden, "Only brands can mark as completed");
+    }
+
+    collaboration.status = status;
+    if (reason) collaboration.cancellationReason = reason;
+    await collaboration.save();
+
+    // Notify the other party
+    const targetUserId = isBrand ? collaboration.influencer : collaboration.brand;
+    const targetUser = await User.findById(targetUserId).select('role');
+
+    await emitActivity({
+        user: targetUserId,
+        role: targetUser?.role || 'user',
+        type: `collaboration_${status}`,
+        title: `Collaboration ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+        description: `The collaboration has been ${status}. ${reason ? 'Reason: ' + reason : ''}`,
+        relatedId: collaboration._id,
+        category: 'collaboration'
+    });
+
+    return collaboration;
+};
+
+/**
+ * Get all collaborations for a user
+ */
+const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
+    const skip = (page - 1) * limit;
+    const objectUserId = new mongoose.Types.ObjectId(userId.toString());
+
+    const matchStage = {
+        isDeleted: false,
+        $or: [
+            { brand: objectUserId },
+            { influencer: objectUserId }
+        ]
+    };
+
+    if (status && status !== "all") {
+        matchStage.status = status;
+    }
+
+    const result = await Collaboration.aggregate([
+        { $match: matchStage },
+        { $sort: { createdAt: -1 } },
+        // Join with Brand User
+        {
+            $lookup: {
+                from: "users",
+                localField: "brand",
+                foreignField: "_id",
+                as: "brandUser"
+            }
+        },
+        { $unwind: "$brandUser" },
+        // Join with Influencer User
+        {
+            $lookup: {
+                from: "users",
+                localField: "influencer",
+                foreignField: "_id",
+                as: "influencerUser"
+            }
+        },
+        { $unwind: "$influencerUser" },
+        // Join with Campaign
+        {
+            $lookup: {
+                from: "campaigns",
+                localField: "campaign",
+                foreignField: "_id",
+                as: "campaignDetails"
+            }
+        },
+        { $unwind: { path: "$campaignDetails", preserveNullAndEmptyArrays: true } },
+        // Project final structure
+        {
+            $project: {
+                _id: 1,
+                status: 1,
+                agreedBudget: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                brand: {
+                    id: "$brandUser._id",
+                    name: "$brandUser.fullname",
+                    avatar: "$brandUser.profilePic"
+                },
+                influencer: {
+                    id: "$influencerUser._id",
+                    name: "$influencerUser.fullname",
+                    username: "$influencerUser.username",
+                    avatar: "$influencerUser.profilePic"
+                },
+                campaign: {
+                    id: "$campaignDetails._id",
+                    title: "$campaignDetails.title",
+                    image: "$campaignDetails.image"
+                }
+            }
+        },
+        {
+            $facet: {
+                data: [{ $skip: skip }, { $limit: Number(limit) }],
+                totalCount: [{ $count: "count" }],
+            },
+        },
+    ]);
+
+    const collaborations = result[0].data || [];
+    const totalCount = result[0].totalCount[0]?.count || 0;
+
+    return {
+        collaborations,
+        total: totalCount,
+        page: Number(page),
+        pages: Math.ceil(totalCount / limit),
+    };
+};
+
+/**
+ * Get single collaboration details
+ */
+const getCollaborationDetails = async (id, userId) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(validationStatus.badRequest, "Invalid collaboration ID");
+    }
+
+    const collaboration = await Collaboration.findOne({
+        _id: id,
+        isDeleted: false,
+        $or: [
+            { brand: userId },
+            { influencer: userId }
+        ]
+    })
+    .populate("brand", "fullname email profilePic")
+    .populate("influencer", "fullname username email profilePic")
+    .populate("campaign", "title description image targetPlatform")
+    .lean();
+
+    if (!collaboration) {
+        throw new ApiError(validationStatus.notFound, "Collaboration not found");
+    }
+
+    return collaboration;
+};
+
+/**
+ * Add a deliverable (Brand only)
+ */
+const addDeliverable = async (collaborationId, userId, deliverableData) => {
+    const collaboration = await Collaboration.findById(collaborationId);
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    if (collaboration.brand.toString() !== userId.toString()) {
+        throw new ApiError(validationStatus.forbidden, "Only brands can add deliverables");
+    }
+
+    collaboration.deliverables.push(deliverableData);
+    await collaboration.save();
+    return collaboration;
+};
+
+/**
+ * Update a deliverable (Brand only for details)
+ */
+const updateDeliverable = async (collaborationId, deliverableId, userId, updateData) => {
+    const collaboration = await Collaboration.findById(collaborationId);
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    if (collaboration.brand.toString() !== userId.toString()) {
+        throw new ApiError(validationStatus.forbidden, "Only brands can update deliverable details");
+    }
+
+    const deliverable = collaboration.deliverables.id(deliverableId);
+    if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
+
+    Object.assign(deliverable, updateData);
+    await collaboration.save();
+    return collaboration;
+};
+
+/**
+ * Submit a deliverable (Influencer only)
+ */
+const submitDeliverable = async (collaborationId, deliverableId, userId, submissionData) => {
+    const collaboration = await Collaboration.findById(collaborationId);
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    if (collaboration.influencer.toString() !== userId.toString()) {
+        throw new ApiError(validationStatus.forbidden, "Only influencers can submit deliverables");
+    }
+
+    const deliverable = collaboration.deliverables.id(deliverableId);
+    if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
+
+    deliverable.submissionFiles = submissionData.submissionFiles || [];
+    deliverable.status = "SUBMITTED";
+    deliverable.submittedAt = new Date();
+    
+    await collaboration.save();
+    return collaboration;
+};
+
+/**
+ * Review a deliverable (Brand only)
+ */
+const reviewDeliverable = async (collaborationId, deliverableId, userId, { status, revisionNotes }) => {
+    const collaboration = await Collaboration.findById(collaborationId);
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    if (collaboration.brand.toString() !== userId.toString()) {
+        throw new ApiError(validationStatus.forbidden, "Only brands can review deliverables");
+    }
+
+    const deliverable = collaboration.deliverables.id(deliverableId);
+    if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
+
+    if (!["APPROVED", "REVISION_REQUESTED"].includes(status)) {
+        throw new ApiError(validationStatus.badRequest, "Invalid review status");
+    }
+
+    deliverable.status = status;
+    if (revisionNotes) deliverable.revisionNotes = revisionNotes;
+    if (status === "APPROVED") deliverable.approvedAt = new Date();
+
+    await collaboration.save();
+    return collaboration;
+};
+
+/**
+ * Delete a deliverable (Brand only)
+ */
+const deleteDeliverable = async (collaborationId, deliverableId, userId) => {
+    const collaboration = await Collaboration.findById(collaborationId);
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    if (collaboration.brand.toString() !== userId.toString()) {
+        throw new ApiError(validationStatus.forbidden, "Only brands can delete deliverables");
+    }
+
+    collaboration.deliverables.pull(deliverableId);
+    await collaboration.save();
+    return collaboration;
+};
+
 export const collaborationService = {
     sendRequest,
     getRequests,
     acceptRequest,
     updateRequestStatus,
+    getCollaborations,
+    getCollaborationDetails,
+    updateCollaborationStatus,
+    addDeliverable,
+    updateDeliverable,
+    submitDeliverable,
+    reviewDeliverable,
+    deleteDeliverable,
 };

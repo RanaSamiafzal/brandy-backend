@@ -1,6 +1,7 @@
 import Influencer from "./influencer.model.js";
 import User from "../user/user.model.js";
 import CollaborationRequest from "../collaboration/collaboration-request.model.js";
+import Collaboration from "../collaboration/collaboration.model.js";
 import Review from "../collaboration/review.model.js";
 import Activity from "../activity/activity.model.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -12,13 +13,31 @@ import mongoose from "mongoose";
  * Get influencer dashboard statistics
  */
 const getDashboardStats = async (userId) => {
-    const influencer = await Influencer.findOne({ user: userId }).select("_id").lean();
+    // 1. Fetch Influencer Profile for ratings
+    const influencer = await Influencer.findOne({ user: userId }).select("_id averageRating").lean();
     if (!influencer) {
         throw new ApiError(validationStatus.notFound, "Influencer profile not found");
     }
 
-    const stats = await CollaborationRequest.aggregate([
-        { $match: { receiver: new mongoose.Types.ObjectId(userId) } },
+    const objectUserId = new mongoose.Types.ObjectId(userId.toString());
+
+    // 2. Fetch Aggregated Request Stats (Including Sent and Received)
+    const statsResult = await CollaborationRequest.aggregate([
+        { 
+            $match: { 
+                $or: [{ sender: objectUserId }, { receiver: objectUserId }] 
+            } 
+        },
+        {
+            $lookup: {
+                from: "campaigns",
+                localField: "campaign",
+                foreignField: "_id",
+                as: "campaignInfo"
+            }
+        },
+        { $unwind: "$campaignInfo" },
+        { $match: { "campaignInfo.isDeleted": false } },
         {
             $group: {
                 _id: null,
@@ -29,17 +48,98 @@ const getDashboardStats = async (userId) => {
         }
     ]);
 
+    // 3. Performance: Completion Rate
+    const totalCollaborations = await Collaboration.countDocuments({ influencer: objectUserId, isDeleted: false });
+    const completedCount = await Collaboration.countDocuments({ influencer: objectUserId, status: "completed", isDeleted: false });
+    const completionRate = totalCollaborations > 0 ? Math.round((completedCount / totalCollaborations) * 100) : 0;
+
+    // 4. Performance: Average Response Time
+    const requestsWithResponse = await CollaborationRequest.find({
+        receiver: objectUserId,
+        respondedAt: { $ne: null }
+    }).select("createdAt respondedAt").lean();
+
+    let averageResponseTime = "N/A";
+    if (requestsWithResponse.length > 0) {
+        const totalResponseTime = requestsWithResponse.reduce((acc, req) => {
+            const start = new Date(req.createdAt);
+            const end = new Date(req.respondedAt);
+            return acc + (end - start);
+        }, 0);
+        const avgMs = totalResponseTime / requestsWithResponse.length;
+        const avgDays = (avgMs / (1000 * 60 * 60 * 24)).toFixed(1);
+        averageResponseTime = `${avgDays} days`;
+    }
+
+    // 5. ALL Requests (Sent + Received, Top 3) with brand details
+    const rawAllRequests = await CollaborationRequest.find({
+        $or: [{ sender: objectUserId }, { receiver: objectUserId }]
+    })
+    .sort({ createdAt: -1 })
+    .populate("sender", "fullname profilePic")
+    .populate("receiver", "fullname profilePic")
+    .populate({
+        path: "campaign",
+        match: { isDeleted: false },
+        select: "name industry"
+    })
+    .lean();
+
+    const allRequests = rawAllRequests
+        .filter(req => req.campaign)
+        .slice(0, 3)
+        .map(req => {
+            const isSent = req.sender?._id?.toString() === userId.toString();
+            return {
+                ...req,
+                type: isSent ? "sent" : "received",
+                brandDetails: isSent ? req.receiver : req.sender
+            };
+        });
+
+    // 6. Collaborations (Top 3) with brand and progress
+    const collaborationsRaw = await Collaboration.find({
+        influencer: objectUserId,
+        isDeleted: false
+    })
+    .sort({ createdAt: -1 })
+    .populate("brand", "fullname profilePic")
+    .populate("campaign", "name industry")
+    .limit(3)
+    .lean();
+
+    const collaborations = collaborationsRaw.map(collab => {
+        const total = collab.deliverables?.length || 0;
+        const approved = collab.deliverables?.filter(d => d.status === "APPROVED" || d.status === "DELIVERED").length || 0;
+        const progress = total > 0 ? Math.round((approved / total) * 100) : 0;
+        return {
+            ...collab,
+            progress
+        };
+    });
+
     const recentActivities = await Activity.find({ user: userId, isDeleted: false })
         .sort({ createdAt: -1 })
         .limit(5)
         .lean();
 
     return {
-        stats: stats[0] || { totalRequests: 0, pendingRequests: 0, acceptedRequests: 0 },
+        stats: {
+            ...(statsResult[0] || { totalRequests: 0, pendingRequests: 0, acceptedRequests: 0 }),
+            completedCollaborations: completedCount
+        },
+        performance: {
+            averageRating: influencer.averageRating || 0,
+            completionRate: `${completionRate}%`,
+            averageResponseTime
+        },
+        allRequests,
+        collaborations,
         recentActivities,
         profile: influencer
     };
 };
+
 
 /**
  * Get influencer profile
@@ -271,7 +371,14 @@ const searchInfluencers = async ({
  */
 const getInfluencerById = async (influencerId) => {
     const influencers = await Influencer.aggregate([
-        { $match: { _id: new mongoose.Types.ObjectId(influencerId) } },
+        { 
+            $match: { 
+                $or: [
+                    { _id: new mongoose.Types.ObjectId(influencerId) },
+                    { user: new mongoose.Types.ObjectId(influencerId) }
+                ]
+            } 
+        },
         {
             $lookup: {
                 from: "users",

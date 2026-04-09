@@ -8,6 +8,29 @@ const router = Router();
 
 router.use(verifyJwt);
 
+router.route("/")
+    .get(collaborationController.getCollaborations);
+
+router.route("/:id")
+    .get(collaborationController.getCollaborationDetails);
+
+router.route("/:id/cancel")
+    .patch(collaborationController.cancelCollaboration);
+
+router.route("/:id/complete")
+    .patch(collaborationController.completeCollaboration);
+
+// Deliverables management
+router.route("/:id/deliverables")
+    .post(collaborationController.addDeliverable);
+
+router.route("/:id/deliverables/:deliverableId")
+    .patch(collaborationController.updateDeliverable)
+    .delete(collaborationController.deleteDeliverable);
+
+router.post("/:id/deliverables/:deliverableId/submit", collaborationController.submitDeliverable);
+router.patch("/:id/deliverables/:deliverableId/review", collaborationController.reviewDeliverable);
+
 router.route("/request")
     .post(validate(collaborationValidation.sendRequestSchema), collaborationController.sendCollaborationRequest)
     .get(validate(collaborationValidation.requestQuerySchema, "query"), collaborationController.getCollaborationRequests);

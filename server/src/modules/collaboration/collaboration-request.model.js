@@ -59,6 +59,10 @@ const CollaborationRequestSchema = new mongoose.Schema({
       feedback: { type: String }
     }
   ],
+  rejectionReason: {
+    type: String,
+    default: "",
+  },
 },
   { timestamps: true });
 

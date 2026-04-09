@@ -301,6 +301,62 @@ const deleteCampaign = AsyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * Handle canceling a campaign
+ */
+const cancelCampaign = AsyncHandler(async (req, res) => {
+    const { campaignId } = req.params;
+    const { cancelReason } = req.body;
+    const brandId = req.user._id;
+
+    const cancelledCampaign = await campaignService.cancelCampaign(campaignId, brandId, cancelReason);
+
+    // Logging activity
+    await emitActivity({
+        user: brandId,
+        role: "brand",
+        type: "campaign_cancelled",
+        title: "Campaign Cancelled",
+        description: `You cancelled the campaign: ${cancelledCampaign.name}`,
+        relatedId: cancelledCampaign._id,
+        category: 'application'
+    });
+
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, cancelledCampaign, "Campaign cancelled successfully")
+    );
+});
+
+/**
+ * Handle extending a campaign duration (Reactivate)
+ */
+const extendCampaignDuration = AsyncHandler(async (req, res) => {
+    const { campaignId } = req.params;
+    const { newEndDate } = req.query;
+    const brandId = req.user._id;
+
+    if (!newEndDate) {
+        throw new ApiError(validationStatus.badRequest, "New end date is required");
+    }
+
+    const extendedCampaign = await campaignService.extendCampaignDuration(campaignId, brandId, newEndDate);
+
+    // Logging activity
+    await emitActivity({
+        user: brandId,
+        role: "brand",
+        type: "campaign_updated",
+        title: "Campaign Reactivated",
+        description: `You extended and reactivated the campaign: ${extendedCampaign.name}`,
+        relatedId: extendedCampaign._id,
+        category: 'application'
+    });
+
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, extendedCampaign, "Campaign extended and reactivated successfully")
+    );
+});
+
 export const campaignController = {
     createCampaign,
     getAllCampaigns,
@@ -308,4 +364,6 @@ export const campaignController = {
     updateCampaign,
     deleteCampaign,
     applyToCampaign,
+    cancelCampaign,
+    extendCampaignDuration,
 };

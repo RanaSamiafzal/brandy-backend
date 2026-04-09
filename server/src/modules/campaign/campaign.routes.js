@@ -36,6 +36,18 @@ router.route("/:campaignId")
         campaignController.deleteCampaign
     );
 
+router.patch(
+    "/:campaignId/cancel",
+    roleMiddleware(["brand"]),
+    campaignController.cancelCampaign
+);
+
+router.patch(
+    "/:campaignId/extend",
+    roleMiddleware(["brand"]),
+    campaignController.extendCampaignDuration
+);
+
 router.post(
     "/:campaignId/apply",
     roleMiddleware(["influencer"]),

@@ -47,6 +47,12 @@ app.use('/api/v1/campaigns', campaignRouter)
 app.use('/api/v1/collaborations', collaborationRouter)
 app.use('/api/v1/activities', activityRouter)
 
+app.get('/api/v1/ping', (req, res) => res.json({ 
+    status: 'ok', 
+    server: 'brandy-backend-primary',
+    timestamp: new Date().toISOString()
+}))
+
 // Error handling middleware
 app.use(errorMiddleware);
 

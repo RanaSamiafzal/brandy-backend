@@ -46,25 +46,6 @@ const acceptCollaborationRequest = AsyncHandler(async (req, res) => {
     const { requestId } = req.params;
     const { request, collaboration } = await collaborationService.acceptRequest(requestId, req.user._id);
 
-    // Log activity for both parties
-    await emitActivity({
-        user: request.sender,
-        role: request.initiatedBy === "brand" ? "brand" : "influencer",
-        type: "collaboration_accepted",
-        title: "Collaboration Request Accepted",
-        description: `Your collaboration request has been accepted.`,
-        relatedId: collaboration._id,
-    });
-
-    await emitActivity({
-        user: req.user._id,
-        role: req.user.role,
-        type: "collaboration_started",
-        title: "Collaboration Started",
-        description: `You accepted a collaboration request.`,
-        relatedId: collaboration._id,
-    });
-
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, { request, collaboration }, "Collaboration request accepted")
     );
@@ -92,10 +73,118 @@ const cancelCollaborationRequest = AsyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * Handle fetching all collaborations for the user
+ */
+const getCollaborations = AsyncHandler(async (req, res) => {
+    const result = await collaborationService.getCollaborations(req.user._id, req.query);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, result, "Collaborations fetched successfully")
+    );
+});
+
+/**
+ * Handle fetching a single collaboration's details
+ */
+const getCollaborationDetails = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const collaboration = await collaborationService.getCollaborationDetails(id, req.user._id);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Collaboration details fetched successfully")
+    );
+});
+
+/**
+ * Handle cancelling an active collaboration
+ */
+const cancelCollaboration = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const collaboration = await collaborationService.updateCollaborationStatus(id, req.user._id, "cancelled", reason);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Collaboration cancelled successfully")
+    );
+});
+
+/**
+ * Handle completing an active collaboration
+ */
+const completeCollaboration = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const collaboration = await collaborationService.updateCollaborationStatus(id, req.user._id, "completed");
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Collaboration completed successfully")
+    );
+});
+
+/**
+ * Handle adding a deliverable
+ */
+const addDeliverable = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const collaboration = await collaborationService.addDeliverable(id, req.user._id, req.body);
+    return res.status(validationStatus.created).json(
+        new ApiResponse(validationStatus.created, collaboration, "Deliverable added successfully")
+    );
+});
+
+/**
+ * Handle updating a deliverable's details
+ */
+const updateDeliverable = AsyncHandler(async (req, res) => {
+    const { id, deliverableId } = req.params;
+    const collaboration = await collaborationService.updateDeliverable(id, deliverableId, req.user._id, req.body);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Deliverable updated successfully")
+    );
+});
+
+/**
+ * Handle influencer submission of a deliverable
+ */
+const submitDeliverable = AsyncHandler(async (req, res) => {
+    const { id, deliverableId } = req.params;
+    const collaboration = await collaborationService.submitDeliverable(id, deliverableId, req.user._id, req.body);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Deliverable submitted successfully")
+    );
+});
+
+/**
+ * Handle brand review (approve/reject) of a deliverable
+ */
+const reviewDeliverable = AsyncHandler(async (req, res) => {
+    const { id, deliverableId } = req.params;
+    const collaboration = await collaborationService.reviewDeliverable(id, deliverableId, req.user._id, req.body);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Deliverable reviewed successfully")
+    );
+});
+
+/**
+ * Handle deleting a deliverable
+ */
+const deleteDeliverable = AsyncHandler(async (req, res) => {
+    const { id, deliverableId } = req.params;
+    const collaboration = await collaborationService.deleteDeliverable(id, deliverableId, req.user._id);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Deliverable deleted successfully")
+    );
+});
+
 export const collaborationController = {
     sendCollaborationRequest,
     getCollaborationRequests,
     acceptCollaborationRequest,
     rejectCollaborationRequest,
     cancelCollaborationRequest,
+    getCollaborations,
+    getCollaborationDetails,
+    cancelCollaboration,
+    completeCollaboration,
+    addDeliverable,
+    updateDeliverable,
+    submitDeliverable,
+    reviewDeliverable,
+    deleteDeliverable,
 };

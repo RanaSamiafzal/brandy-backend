@@ -2,6 +2,7 @@ import Campaign from "./campaign.model.js";
 import mongoose from "mongoose";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
+import { emitActivity } from "../../utils/activityUtils.js";
 
 /**
  * Calculate campaign status based on current date and timeline
@@ -208,18 +209,48 @@ const getAllCampaigns = async ({
 
   // ── Brand path: simple query, no visibility gate needed ───────────────────
   if (role === "brand" && brand) {
-    const query = { isDeleted: false, brand };
-    if (status) query.status = status;
-    if (industry) query.industry = { $regex: industry, $options: "i" };
-    if (platform) query.platform = { $in: [platform] };
-    if (search) query.$text = { $search: search };
+    const matchStage = { isDeleted: false, brand: new mongoose.Types.ObjectId(brand) };
+    if (status) matchStage.status = status;
+    if (industry) matchStage.industry = { $regex: industry, $options: "i" };
+    if (platform) matchStage.platform = { $in: [platform] };
+    if (search) matchStage.$text = { $search: search };
 
-    const campaigns = await Campaign.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean();
-    const total = await Campaign.countDocuments(query);
+    const pipeline = [
+      { $match: matchStage },
+      // Join Collaboration to see if there's an active one
+      {
+        $lookup: {
+          from: "collaborations",
+          let: { campaignId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$campaign", "$$campaignId"] },
+                status: { $in: ["active", "in_progress", "review"] },
+                isDeleted: false
+              }
+            },
+            { $project: { _id: 1 } }
+          ],
+          as: "ongoingCollab"
+        }
+      },
+      {
+        $addFields: {
+          ongoingCollaborationId: { $arrayElemAt: ["$ongoingCollab._id", 0] }
+        }
+      },
+      {
+        $facet: {
+          data: [{ $sort: { createdAt: -1 } }, { $skip: skip }, { $limit: Number(limit) }],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ];
+
+    const result = await Campaign.aggregate(pipeline);
+    const campaigns = result[0]?.data || [];
+    const total = result[0]?.totalCount[0]?.count || 0;
 
     return {
       campaigns: campaigns.map((c) => ({
@@ -235,7 +266,11 @@ const getAllCampaigns = async ({
   }
 
   // ── Influencer / admin path: aggregate with brand visibility gate ─────────
-  const matchStage = { isDeleted: false, status: "active" };
+  const matchStage = { 
+    isDeleted: false, 
+    status: "active",
+    "campaignTimeline.endDate": { $gte: new Date() } // Only show campaigns that haven't expired
+  };
   if (industry) matchStage.industry = { $regex: industry, $options: "i" };
   if (platform) matchStage.platform = { $in: [platform] };
   if (search) matchStage.$text = { $search: search };
@@ -407,14 +442,96 @@ const updateCampaign = async (campaignId, updateData) => {
  * Soft delete a campaign
  */
 const deleteCampaign = async (campaignId) => {
-  const campaign = await Campaign.findByIdAndUpdate(
-    campaignId,
-    { isDeleted: true },
-    { new: true }
-  );
-
+  const campaign = await Campaign.findById(campaignId);
   if (!campaign) {
     throw new ApiError(validationStatus.notFound, "Campaign not found");
+  }
+
+  // Check if there are any accepted requests for this campaign
+  const CollaborationRequest = mongoose.model("CollaborationRequest");
+  const acceptedCount = await CollaborationRequest.countDocuments({ 
+    campaign: campaignId, 
+    status: "accepted" 
+  });
+
+  if (acceptedCount > 0) {
+    throw new ApiError(
+      validationStatus.badRequest, 
+      "Cannot delete a campaign with accepted influencers. Please cancel it instead."
+    );
+  }
+
+  campaign.isDeleted = true;
+  await campaign.save();
+
+  // Delete all collaboration requests associated with this campaign
+  if (CollaborationRequest) {
+    await CollaborationRequest.deleteMany({ campaign: campaignId });
+  }
+
+  // Soft delete any collabs 
+  const Collaboration = mongoose.models.Collaboration;
+  if (Collaboration) {
+    await Collaboration.updateMany(
+      { campaign: campaignId },
+      { isDeleted: true, deletedAt: new Date(), status: 'cancelled' }
+    );
+  }
+
+  return campaign;
+};
+
+/**
+ * Cancel a campaign (Brand only)
+ */
+const cancelCampaign = async (campaignId, brandId, cancelReason = "") => {
+  const campaign = await Campaign.findOne({ _id: campaignId, brand: brandId, isDeleted: false });
+  if (!campaign) {
+    throw new ApiError(validationStatus.notFound, "Campaign not found or access denied");
+  }
+
+  if (campaign.status === 'cancelled') {
+    throw new ApiError(validationStatus.badRequest, "Campaign is already cancelled");
+  }
+
+  campaign.status = 'cancelled';
+  campaign.cancelReason = cancelReason;
+  campaign.cancelledAt = new Date();
+  await campaign.save();
+
+  // 1. Cancel all accepted collaborations
+  const Collaboration = mongoose.models.Collaboration;
+  if (Collaboration) {
+    await Collaboration.updateMany(
+      { campaign: campaignId },
+      { status: 'cancelled', cancellationReason: cancelReason, cancelledBy: brandId }
+    );
+  }
+
+  // 2. Reject all pending requests
+  const CollaborationRequest = mongoose.model("CollaborationRequest");
+  if (CollaborationRequest) {
+    await CollaborationRequest.updateMany(
+      { campaign: campaignId, status: "pending" },
+      { status: "rejected", respondedAt: new Date() }
+    );
+  }
+
+  // 3. Notify all influencers involved (accepted or pending)
+  const influencersToNotify = await CollaborationRequest.find({ 
+    campaign: campaignId 
+  }).distinct("sender");
+
+  for (const influencerId of influencersToNotify) {
+    await emitActivity({
+      user: influencerId,
+      role: "influencer",
+      type: "collaboration_cancelled",
+      title: "Campaign Cancelled",
+      description: `The campaign "${campaign.name}" has been cancelled by the brand.`,
+      relatedId: campaignId,
+      category: "collaboration"
+    });
   }
 
   return campaign;
@@ -431,6 +548,17 @@ const applyToCampaign = async (campaignId, influencerId, data) => {
 
   if (campaign.status !== "active") {
     throw new ApiError(validationStatus.badRequest, "This campaign is not accepting applications");
+  }
+
+  // NEW: Check if an influencer was already accepted for this campaign
+  const CollaborationRequest = mongoose.model("CollaborationRequest");
+  const acceptedRequest = await CollaborationRequest.findOne({
+    campaign: campaignId,
+    status: "accepted"
+  });
+
+  if (acceptedRequest) {
+    throw new ApiError(validationStatus.badRequest, "This campaign has already selected an influencer and is no longer accepting applications");
   }
 
   const existing = await CollaborationRequest.findOne({
@@ -462,9 +590,42 @@ const applyToCampaign = async (campaignId, influencerId, data) => {
     relatedId: request._id,
   });
 
+  // Notify the brand that someone applied
+  await emitActivity({
+    user: campaign.brand,
+    role: "brand",
+    type: "collaboration_request_received",
+    title: "New Campaign Application",
+    description: `An influencer has applied to your campaign "${campaign.name}"`,
+    relatedId: request._id,
+    category: "application",
+  });
+
   return request;
 };
 
+/**
+ * Extend campaign duration (Reactivate)
+ */
+const extendCampaignDuration = async (campaignId, brandId, newEndDate) => {
+  const campaign = await Campaign.findOne({ _id: campaignId, brand: brandId, isDeleted: false });
+  if (!campaign) {
+    throw new ApiError(validationStatus.notFound, "Campaign not found or access denied");
+  }
+
+  const now = new Date();
+  const end = new Date(newEndDate);
+
+  if (end <= now) {
+    throw new ApiError(validationStatus.badRequest, "New end date must be in the future");
+  }
+
+  campaign.campaignTimeline.endDate = end;
+  campaign.status = calculateStatus(campaign.campaignTimeline.startDate, end);
+  await campaign.save();
+
+  return campaign;
+};
 
 export const campaignService = {
   createCampaign,
@@ -474,4 +635,6 @@ export const campaignService = {
   deleteCampaign,
   calculateStatus,
   applyToCampaign,
+  cancelCampaign,
+  extendCampaignDuration,
 };

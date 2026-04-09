@@ -64,8 +64,16 @@ const CampaignSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'active', 'completed', 'paused', 'draft'],
+    enum: ['pending', 'active', 'completed', 'paused', 'draft', 'cancelled'],
     default: 'pending',
+  },
+  cancelReason: {
+    type: String,
+    default: "",
+  },
+  cancelledAt: {
+    type: Date,
+    default: null,
   },
   image: {
     type: String,
