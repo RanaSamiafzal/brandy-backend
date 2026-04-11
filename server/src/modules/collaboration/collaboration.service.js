@@ -498,6 +498,7 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
         {
             $project: {
                 _id: 1,
+                title: 1,
                 status: 1,
                 agreedBudget: 1,
                 createdAt: 1,
@@ -515,9 +516,39 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
                 },
                 campaign: {
                     id: "$campaignDetails._id",
-                    title: "$campaignDetails.title",
+                    name: "$campaignDetails.name",
                     image: "$campaignDetails.image"
-                }
+                },
+                deliverablesSummary: {
+                    total: { 
+                        $size: { $ifNull: ["$deliverables", []] } 
+                    },
+                    completed: {
+                        $size: {
+                            $filter: {
+                                input: { $ifNull: ["$deliverables", []] },
+                                as: "d",
+                                cond: { $in: ["$$d.status", ["APPROVED", "DELIVERED"]] }
+                            }
+                        }
+                    }
+                },
+                deliverables: {
+                    $map: {
+                        input: { $ifNull: ["$deliverables", []] },
+                        as: "d",
+                        in: {
+                            _id: "$$d._id",
+                            title: "$$d.title",
+                            status: "$$d.status",
+                            dueDate: "$$d.dueDate",
+                            priority: "$$d.priority"
+                        }
+                    }
+                },
+                startDate: 1,
+                endDate: 1,
+                paymentStatus: 1
             }
         },
         {
@@ -557,7 +588,7 @@ const getCollaborationDetails = async (id, userId) => {
     })
     .populate("brand", "fullname email profilePic")
     .populate("influencer", "fullname username email profilePic")
-    .populate("campaign", "title description image targetPlatform")
+    .populate("campaign", "name description image platform")
     .lean();
 
     if (!collaboration) {
@@ -584,14 +615,29 @@ const addDeliverable = async (collaborationId, userId, deliverableData) => {
 };
 
 /**
- * Update a deliverable (Brand only for details)
+ * Update a deliverable
+ * - Brands can update any field
+ * - Influencers can only move status to IN_PROGRESS (board drag)
  */
 const updateDeliverable = async (collaborationId, deliverableId, userId, updateData) => {
     const collaboration = await Collaboration.findById(collaborationId);
     if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
 
-    if (collaboration.brand.toString() !== userId.toString()) {
-        throw new ApiError(validationStatus.forbidden, "Only brands can update deliverable details");
+    const isBrand = collaboration.brand.toString() === userId.toString();
+    const isInfluencer = collaboration.influencer.toString() === userId.toString();
+
+    if (!isBrand && !isInfluencer) {
+        throw new ApiError(validationStatus.forbidden, "You are not part of this collaboration");
+    }
+
+    // Influencer can only move status to IN_PROGRESS via the board
+    if (isInfluencer) {
+        const allowedStatuses = ["IN_PROGRESS"];
+        if (!updateData.status || !allowedStatuses.includes(updateData.status)) {
+            throw new ApiError(validationStatus.forbidden, "Influencers can only move tasks to In Progress");
+        }
+        // Strip all other fields for safety
+        updateData = { status: updateData.status };
     }
 
     const deliverable = collaboration.deliverables.id(deliverableId);

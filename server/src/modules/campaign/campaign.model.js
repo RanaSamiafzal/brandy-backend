@@ -23,6 +23,12 @@ const CampaignSchema = new mongoose.Schema({
       required: true,
     }
   ],
+  contentTypes: [
+    {
+      type: String,
+      trim: true,
+    }
+  ],
   deliverables: {
     type: String,
     trim: true,
@@ -82,6 +88,35 @@ const CampaignSchema = new mongoose.Schema({
   isDeleted: {
     type: Boolean,
     default: false,
+  },
+  // Analytics fields
+  reach: {
+    type: Number,
+    default: 0,
+  },
+  engagementRate: {
+    type: Number,
+    default: 0,
+  },
+  roi: {
+    type: Number,
+    default: 0,
+  },
+  impressions: {
+    type: Number,
+    default: 0,
+  },
+  likes: {
+    type: Number,
+    default: 0,
+  },
+  comments: {
+    type: Number,
+    default: 0,
+  },
+  shares: {
+    type: Number,
+    default: 0,
   }
 }, {
   timestamps: true,

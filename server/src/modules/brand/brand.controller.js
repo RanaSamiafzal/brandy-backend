@@ -16,6 +16,16 @@ const getBrandDashboard = AsyncHandler(async (req, res) => {
 });
 
 /**
+ * Get brand analytics dashboard
+ */
+const getBrandAnalytics = AsyncHandler(async (req, res) => {
+    const analytics = await brandService.getAnalyticsDashboard(req.user._id);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, analytics, "Brand analytics fetched successfully")
+    );
+});
+
+/**
  * Get brand influencers
  */
 const getBrandInfluencers = AsyncHandler(async (req, res) => {
@@ -223,6 +233,7 @@ export const brandController = {
     updateBrandProfile,
     getBrandInfluencers,
     getBrandActivity,
+    getBrandAnalytics,
     getBrandInfluencer,
     markActivityAsRead,
     deleteActivity,

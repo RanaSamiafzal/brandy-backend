@@ -25,6 +25,7 @@ router.patch(
 );
 
 router.get("/dashboard", brandController.getBrandDashboard);
+router.get("/analytics", brandController.getBrandAnalytics);
 router.get("/influencers", brandController.getBrandInfluencers);
 router.get("/influencers/:id", brandController.getBrandInfluencer);
 router.get("/activity", brandController.getBrandActivity);

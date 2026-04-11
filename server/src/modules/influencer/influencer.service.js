@@ -12,7 +12,7 @@ import mongoose from "mongoose";
 /**
  * Get influencer dashboard statistics
  */
-const getDashboardStats = async (userId) => {
+const getDashboardStats = async (userId, days = 30) => {
     // 1. Fetch Influencer Profile for ratings
     const influencer = await Influencer.findOne({ user: userId }).select("_id averageRating").lean();
     if (!influencer) {
@@ -20,6 +20,10 @@ const getDashboardStats = async (userId) => {
     }
 
     const objectUserId = new mongoose.Types.ObjectId(userId.toString());
+    const periodDays = parseInt(days) || 30;
+    const now = new Date();
+    const periodStart = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
+    const prevPeriodStart = new Date(now.getTime() - 2 * periodDays * 24 * 60 * 60 * 1000);
 
     // 2. Fetch Aggregated Request Stats (Including Sent and Received)
     const statsResult = await CollaborationRequest.aggregate([
@@ -97,26 +101,126 @@ const getDashboardStats = async (userId) => {
             };
         });
 
-    // 6. Collaborations (Top 3) with brand and progress
-    const collaborationsRaw = await Collaboration.find({
+    // 6. Analytics & Growth Calculation
+    const allCollaborations = await Collaboration.find({
         influencer: objectUserId,
         isDeleted: false
     })
-    .sort({ createdAt: -1 })
     .populate("brand", "fullname profilePic")
-    .populate("campaign", "name industry")
-    .limit(3)
+    .populate("campaign", "name industry reach engagementRate likes comments shares impressions status")
     .lean();
 
-    const collaborations = collaborationsRaw.map(collab => {
-        const total = collab.deliverables?.length || 0;
-        const approved = collab.deliverables?.filter(d => d.status === "APPROVED" || d.status === "DELIVERED").length || 0;
-        const progress = total > 0 ? Math.round((approved / total) * 100) : 0;
-        return {
-            ...collab,
-            progress
+    const calculateAnalyticsForRange = (collabs, start, end) => {
+        let stats = {
+            reach: 0,
+            engagementSum: 0,
+            engagementCount: 0,
+            tasksCompleted: 0,
+            tasksTotal: 0,
+            count: 0,
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            impressions: 0
         };
+
+        collabs.forEach(collab => {
+            const date = new Date(collab.createdAt);
+            if (date >= start && date < end) {
+                stats.count++;
+                if (collab.campaign) {
+                    stats.reach += collab.campaign.reach || 0;
+                    if (collab.campaign.engagementRate > 0) {
+                        stats.engagementSum += collab.campaign.engagementRate;
+                        stats.engagementCount++;
+                    }
+                    stats.likes += collab.campaign.likes || 10;
+                    stats.comments += collab.campaign.comments || 5;
+                    stats.shares += collab.campaign.shares || 2;
+                    stats.impressions += collab.campaign.impressions || 100;
+                }
+                const total = collab.deliverables?.length || 0;
+                const approved = collab.deliverables?.filter(d => 
+                    ["APPROVED", "SUBMITTED", "DELIVERED"].includes(d.status)
+                ).length || 0;
+                stats.tasksTotal += total;
+                stats.tasksCompleted += approved;
+            }
+        });
+        return stats;
+    };
+
+    const current = calculateAnalyticsForRange(allCollaborations, periodStart, now);
+    const previous = calculateAnalyticsForRange(allCollaborations, prevPeriodStart, periodStart);
+
+    const getGrowth = (curr, prev) => {
+        if (prev <= 0) return curr > 0 ? 100 : 0;
+        return Math.round(((curr - prev) / prev) * 100);
+    };
+
+    const finalAnalytics = {
+        totalReach: current.reach,
+        engagementRate: current.engagementCount > 0 ? parseFloat((current.engagementSum / current.engagementCount).toFixed(1)) : 0,
+        collaborationCount: current.count,
+        tasksCompleted: {
+            completed: current.tasksCompleted,
+            total: current.tasksTotal
+        },
+        engagementOverview: {
+            likes: current.likes,
+            comments: current.comments,
+            shares: current.shares,
+            impressions: current.impressions
+        },
+        growth: {
+            reach: getGrowth(current.reach, previous.reach),
+            engagement: getGrowth(
+                current.engagementCount > 0 ? current.engagementSum / current.engagementCount : 0, 
+                previous.engagementCount > 0 ? previous.engagementSum / previous.engagementCount : 0
+            ),
+            tasks: getGrowth(current.tasksCompleted, previous.tasksCompleted),
+            collaborations: getGrowth(current.count, previous.count)
+        },
+        topBrands: [],
+        collaborationPerformance: []
+    };
+
+    // Populate topBrands and performance from current period collabs
+    const topBrandsMap = {};
+    const currentCollabs = allCollaborations.filter(c => new Date(c.createdAt) >= periodStart);
+
+    currentCollabs.forEach(collab => {
+        const brandId = collab.brand?._id?.toString();
+        if (brandId) {
+            if (!topBrandsMap[brandId]) {
+                topBrandsMap[brandId] = {
+                    id: brandId,
+                    name: collab.brand.fullname,
+                    avatar: collab.brand.profilePic,
+                    earnings: 0,
+                    rate: 0
+                };
+            }
+            const earnings = collab.agreedBudget || 0;
+            topBrandsMap[brandId].earnings += earnings;
+            if (collab.campaign?.engagementRate) {
+                topBrandsMap[brandId].rate = Math.max(topBrandsMap[brandId].rate, collab.campaign.engagementRate);
+            }
+        }
+
+        finalAnalytics.collaborationPerformance.push({
+            id: collab._id,
+            brand: collab.brand?.fullname || "Unknown",
+            reach: collab.campaign?.reach || 0,
+            engagement: collab.campaign?.engagementRate || 0,
+            earnings: collab.agreedBudget || 0,
+            deliverablesCount: collab.deliverables?.length || 0
+        });
     });
+
+    finalAnalytics.topBrands = Object.values(topBrandsMap)
+        .sort((a, b) => b.earnings - a.earnings)
+        .slice(0, 5);
 
     const recentActivities = await Activity.find({ user: userId, isDeleted: false })
         .sort({ createdAt: -1 })
@@ -133,8 +237,9 @@ const getDashboardStats = async (userId) => {
             completionRate: `${completionRate}%`,
             averageResponseTime
         },
+        analytics: finalAnalytics,
         allRequests,
-        collaborations,
+        collaborations: allCollaborations.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)), 
         recentActivities,
         profile: influencer
     };

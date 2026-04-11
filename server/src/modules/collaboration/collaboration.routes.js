@@ -8,6 +8,14 @@ const router = Router();
 
 router.use(verifyJwt);
 
+router.route("/request")
+    .post(validate(collaborationValidation.sendRequestSchema), collaborationController.sendCollaborationRequest)
+    .get(validate(collaborationValidation.requestQuerySchema, "query"), collaborationController.getCollaborationRequests);
+
+router.post("/request/:requestId/accept", collaborationController.acceptCollaborationRequest);
+router.post("/request/:requestId/reject", collaborationController.rejectCollaborationRequest);
+router.post("/request/:requestId/cancel", collaborationController.cancelCollaborationRequest);
+
 router.route("/")
     .get(collaborationController.getCollaborations);
 
@@ -31,12 +39,5 @@ router.route("/:id/deliverables/:deliverableId")
 router.post("/:id/deliverables/:deliverableId/submit", collaborationController.submitDeliverable);
 router.patch("/:id/deliverables/:deliverableId/review", collaborationController.reviewDeliverable);
 
-router.route("/request")
-    .post(validate(collaborationValidation.sendRequestSchema), collaborationController.sendCollaborationRequest)
-    .get(validate(collaborationValidation.requestQuerySchema, "query"), collaborationController.getCollaborationRequests);
-
-router.post("/request/:requestId/accept", collaborationController.acceptCollaborationRequest);
-router.post("/request/:requestId/reject", collaborationController.rejectCollaborationRequest);
-router.post("/request/:requestId/cancel", collaborationController.cancelCollaborationRequest);
-
 export default router;
+

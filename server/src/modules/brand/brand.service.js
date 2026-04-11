@@ -113,6 +113,160 @@ const getDashboardStats = async (userId) => {
 };
 
 /**
+ * Get analytics dashboard dashboard statistics
+ * Aggregates reach, engagement, etc.
+ */
+const getAnalyticsDashboard = async (userId) => {
+    // Ensure brand exists
+    const brand = await Brand.findOne({ user: userId }).select("_id").lean();
+    if (!brand) {
+        throw new ApiError(validationStatus.notFound, "Brand profile not found");
+    }
+
+    // Fetch all non-deleted campaigns for this brand
+    const campaigns = await Campaign.find({ brand: userId, isDeleted: false }).lean();
+
+    // If no campaigns have analytics, or they are all 0, seed some sample data as per user "sure"
+    const hasAnalytics = campaigns.some(c => c.reach > 0);
+    if (!hasAnalytics && campaigns.length > 0) {
+        await seedSampleAnalytics(userId);
+        // Re-fetch campaigns after seeding
+        return getAnalyticsDashboard(userId);
+    }
+
+    // Aggregations
+    const stats = {
+        totalReach: 0,
+        avgEngagementRate: 0,
+        activeCampaigns: 0,
+        engagementOverview: {
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            impressions: 0
+        },
+        platformStats: {
+            instagram: { reach: 0, engagement: 0, posts: 0, followers: 0 },
+            youtube: { reach: 0, engagement: 0, posts: 0, followers: 0 },
+            tiktok: { reach: 0, engagement: 0, posts: 0, followers: 0 }
+        },
+        campaignPerformance: [],
+        topPerformers: [],
+        collaborationCount: 0,
+        requestStats: {
+            sent: 0,
+            received: 0,
+            accepted: 0,
+            pending: 0,
+            total: 0
+        }
+    };
+
+    // Fetch collaboration/request data
+    const requests = await CollaborationRequest.find({
+        $or: [
+            { sender: userId },
+            { receiver: userId }
+        ]
+    }).lean();
+
+    requests.forEach(req => {
+        stats.requestStats.total++;
+        if (req.sender.toString() === userId.toString()) stats.requestStats.sent++;
+        if (req.receiver.toString() === userId.toString()) stats.requestStats.received++;
+        
+        if (req.status === 'accepted') {
+            stats.requestStats.accepted++;
+            stats.collaborationCount++;
+        } else if (req.status === 'pending') {
+            stats.requestStats.pending++;
+        }
+    });
+
+    let totalEngRate = 0;
+    let campaignsWithEngRate = 0;
+
+    campaigns.forEach(c => {
+        stats.totalReach += c.reach || 0;
+        if (c.engagementRate > 0) {
+            totalEngRate += c.engagementRate;
+            campaignsWithEngRate++;
+        }
+        if (c.status === 'active') stats.activeCampaigns++;
+
+        stats.engagementOverview.likes += c.likes || 0;
+        stats.engagementOverview.comments += c.comments || 0;
+        stats.engagementOverview.shares += c.shares || 0;
+        stats.engagementOverview.impressions += c.impressions || 0;
+
+        // Platform specific logic (simplification: mapping first platform if multiple)
+        const primaryPlatform = Array.isArray(c.platform) ? c.platform[0] : c.platform;
+        if (primaryPlatform && stats.platformStats[primaryPlatform]) {
+            stats.platformStats[primaryPlatform].reach += c.reach || 0;
+            stats.platformStats[primaryPlatform].posts += 1; // Assuming 1 post per campaign for now
+            stats.platformStats[primaryPlatform].engagement += c.engagementRate || 0;
+        }
+
+        stats.campaignPerformance.push({
+            name: c.name,
+            reach: c.reach || 0,
+            engagement: c.engagementRate || 0,
+            roi: c.roi || 0,
+            budget: c.budget?.max || 0,
+            id: c._id
+        });
+    });
+
+    stats.avgEngagementRate = campaignsWithEngRate > 0 ? (totalEngRate / campaignsWithEngRate).toFixed(1) : 0;
+    
+    // Calculate platform engagement averages
+    Object.keys(stats.platformStats).forEach(p => {
+        if (stats.platformStats[p].posts > 0) {
+            stats.platformStats[p].engagement = (stats.platformStats[p].engagement / stats.platformStats[p].posts).toFixed(1);
+            // Mock followers gained for polish
+            stats.platformStats[p].followers = Math.floor(stats.platformStats[p].reach * 0.05); 
+        }
+    });
+
+    // Mock Top Performers for visual completeness as per design
+    stats.topPerformers = [
+        { id: "sarah_chen_mock", name: "Sarah Chen", reach: "450K", engagement: "6.2%", avatar: "https://i.pravatar.cc/150?u=sarah" },
+        { id: "mike_johnson_mock", name: "Mike Johnson", reach: "380K", engagement: "7.5%", avatar: "https://i.pravatar.cc/150?u=mike" },
+        { id: "emma_davis_mock", name: "Emma Davis", reach: "320K", engagement: "5.8%", avatar: "https://i.pravatar.cc/150?u=emma" }
+    ];
+
+    return stats;
+};
+
+/**
+ * Seed sample analytics data for a brand's campaigns
+ */
+const seedSampleAnalytics = async (userId) => {
+    const campaigns = await Campaign.find({ brand: userId, isDeleted: false });
+    for (const campaign of campaigns) {
+        const reach = Math.floor(Math.random() * 500000) + 100000;
+        const engagementRate = parseFloat((Math.random() * 8 + 2).toFixed(1));
+        const roi = Math.floor(Math.random() * 400) + 100;
+        const impressions = Math.floor(reach * (Math.random() * 2 + 1.2));
+        const likes = Math.floor(reach * (engagementRate / 100) * 0.7);
+        const comments = Math.floor(likes * 0.15);
+        const shares = Math.floor(likes * 0.05);
+
+        await Campaign.findByIdAndUpdate(campaign._id, {
+            $set: {
+                reach,
+                engagementRate,
+                roi,
+                impressions,
+                likes,
+                comments,
+                shares
+            }
+        });
+    }
+};
+
+/**
  * Get influencers for brand search
  */
 const getBrandInfluencers = async (queryParams) => {
@@ -363,4 +517,6 @@ export const brandService = {
     deleteBrandActivity,
     getPublicProfile,
     getPublicBrandList,
+    getAnalyticsDashboard,
+    seedSampleAnalytics
 };

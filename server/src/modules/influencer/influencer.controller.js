@@ -9,7 +9,8 @@ import { checkAndMarkComplete, getCompletionStatus } from "../../utils/profileCo
  * Get influencer dashboard
  */
 const getInfluencerDashboard = AsyncHandler(async (req, res) => {
-    const stats = await influencerService.getDashboardStats(req.user._id);
+    const { days } = req.query;
+    const stats = await influencerService.getDashboardStats(req.user._id, days);
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, stats, "Influencer dashboard fetched successfully")
     );
