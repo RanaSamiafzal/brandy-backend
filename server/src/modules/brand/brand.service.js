@@ -332,6 +332,12 @@ const updateProfile = async (userId, updateData) => {
     if (!brand) {
         throw new ApiError(validationStatus.notFound, "Brand profile not found");
     }
+
+    // Sync user fullname for consistency
+    if (updateData.brandname) {
+        await User.findByIdAndUpdate(userId, { fullname: updateData.brandname });
+    }
+
     return await getProfile(userId);
 };
 
@@ -463,6 +469,7 @@ const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) =>
 
         {
             $project: {
+                user: 1,
                 brandname: 1,
                 industry: 1,
                 description: 1,

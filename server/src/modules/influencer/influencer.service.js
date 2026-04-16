@@ -295,6 +295,12 @@ const updateProfile = async (userId, updateData) => {
     if (!updatedInfluencer) {
         throw new ApiError(validationStatus.notFound, "Influencer profile not found");
     }
+
+    // Sync user fullname for consistency
+    if (updateData.username) {
+        await User.findByIdAndUpdate(userId, { fullname: updateData.username });
+    }
+
     return await getProfile(userId);
 };
 

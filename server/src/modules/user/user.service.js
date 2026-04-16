@@ -30,6 +30,15 @@ const updateUserProfile = async (userId, updateData) => {
         throw new ApiError(validationStatus.notFound, "User not found");
     }
 
+    // Sync names for consistency
+    if (updateData.fullname) {
+        if (user.role === "brand") {
+            await Brand.findOneAndUpdate({ user: userId }, { brandname: updateData.fullname });
+        } else if (user.role === "influencer") {
+            await Influencer.findOneAndUpdate({ user: userId }, { username: updateData.fullname });
+        }
+    }
+
     // Emit activity
     await emitActivity({
         user: userId,
