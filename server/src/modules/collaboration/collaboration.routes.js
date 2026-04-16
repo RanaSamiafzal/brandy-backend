@@ -19,6 +19,9 @@ router.post("/request/:requestId/cancel", collaborationController.cancelCollabor
 router.route("/")
     .get(collaborationController.getCollaborations);
 
+router.route("/latest/:otherUserId")
+    .get(collaborationController.getLatestCollaborationWithUser);
+
 router.route("/:id")
     .get(collaborationController.getCollaborationDetails);
 

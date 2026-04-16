@@ -60,6 +60,10 @@ const UserSchema = new mongoose.Schema(
             default: "",
         },
         lastLogin: Date,
+        lastActive: {
+            type: Date,
+            default: Date.now,
+        },
         profileComplete: {
             type: Boolean,
             default: false,
@@ -73,6 +77,10 @@ const UserSchema = new mongoose.Schema(
             type: String,
             enum: ["active", "offline"],
             default: "active",
+        },
+        manualOffline: {
+            type: Boolean,
+            default: false,
         },
         isDeactivated: {
             type: Boolean,

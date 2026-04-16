@@ -172,6 +172,17 @@ const deleteDeliverable = AsyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * Handle fetching the latest active collaboration with a specific user
+ */
+const getLatestCollaborationWithUser = AsyncHandler(async (req, res) => {
+    const { otherUserId } = req.params;
+    const collaboration = await collaborationService.getLatestCollaborationWithUser(req.user._id, otherUserId);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Latest collaboration fetched successfully")
+    );
+});
+
 export const collaborationController = {
     sendCollaborationRequest,
     getCollaborationRequests,
@@ -180,6 +191,7 @@ export const collaborationController = {
     cancelCollaborationRequest,
     getCollaborations,
     getCollaborationDetails,
+    getLatestCollaborationWithUser, // Added
     cancelCollaboration,
     completeCollaboration,
     addDeliverable,

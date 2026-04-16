@@ -6,6 +6,7 @@ import { getCompletionStatus, checkAndMarkComplete } from "../../utils/profileCo
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
 import Influencer from "../influencer/influencer.model.js";
 import Brand from "../brand/brand.model.js";
+import User from "./user.model.js";
 
 
 
@@ -19,6 +20,8 @@ const getMe = AsyncHandler(async (req, res) => {
     const userId = req.user._id;
     const role = req.user.role;
 
+    // Force status to "active" when logging in or reloading the page
+    await User.findByIdAndUpdate(userId, { status: "active", manualOffline: false });
     const user = await userService.getUserById(userId);
 
     let roleProfile = null;
@@ -84,7 +87,25 @@ const updateProfile = AsyncHandler(async (req, res) => {
  */
 const updateStatus = AsyncHandler(async (req, res) => {
     const { status } = req.body;
-    const user = await userService.updateUserProfile(req.user._id, { status });
+    let updateObj = { status };
+    if (status === "offline") {
+       updateObj.lastActive = new Date();
+       updateObj.manualOffline = true;
+    } else {
+       updateObj.lastActive = new Date();
+       updateObj.manualOffline = false;
+    }
+    const user = await userService.updateUserProfile(req.user._id, updateObj);
+    
+    const io = req.app.get('socketio');
+    if (io) {
+        io.emit("user_status_changed", { 
+            userId: req.user._id, 
+            status: status, 
+            lastActive: updateObj.lastActive 
+        });
+    }
+
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, user, "Status updated successfully")
     );
