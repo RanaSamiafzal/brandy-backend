@@ -19,8 +19,8 @@ const BrandSchema = new mongoose.Schema(
             trim: true,
         },
         budgetRange: {
-            min: { type: Number, required: true },
-            max: { type: Number, required: true },
+            min: { type: Number, default: 0 },
+            max: { type: Number, default: 0 },
         },
         website: {
             type: String,
@@ -56,10 +56,9 @@ const BrandSchema = new mongoose.Schema(
             default: 0,
         },
         socialMedia: {
-            instagram: { type: String, default: "" },
-            tiktok: { type: String, default: "" },
-            twitter: { type: String, default: "" },
-            linkedin: { type: String, default: "" },
+            type: Map,
+            of: String,
+            default: {},
         },
         lookingFor: [
             {

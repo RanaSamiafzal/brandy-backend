@@ -287,6 +287,27 @@ const getProfile = async (userId) => {
  * Update influencer profile
  */
 const updateProfile = async (userId, updateData) => {
+    // Handle socialMedia Map replacement separately to ensure keys can be deleted
+    // (findOneAndUpdate with $set often merges Map keys instead of replacing them)
+    if (updateData.socialMedia) {
+        console.log(`[InfluencerService] SYNCING socialMedia for user ${userId}. Data:`, JSON.stringify(updateData.socialMedia));
+        const influencer = await Influencer.findOne({ user: userId });
+        if (influencer) {
+            influencer.socialMedia.clear();
+            const entries = Object.entries(updateData.socialMedia);
+            if (entries.length > 0) {
+                entries.forEach(([platform, value]) => {
+                    influencer.socialMedia.set(platform, value || "");
+                });
+            }
+            await influencer.save({ validateBeforeSave: false });
+            console.log(`[InfluencerService] Map updated. New keys: ${Array.from(influencer.socialMedia.keys()).join(', ') || 'NONE'}`);
+        } else {
+            console.log(`[InfluencerService] Profile not found, skipping Map sync.`);
+        }
+        delete updateData.socialMedia;
+    }
+
     const updatedInfluencer = await Influencer.findOneAndUpdate(
         { user: userId },
         { $set: updateData },
@@ -430,6 +451,9 @@ const searchInfluencers = async ({
                 platforms: { $push: "$platforms" },
                 minPrice: { $min: "$platforms.services.price" },
                 createdAt: { $first: "$createdAt" },
+                socialMedia: { $first: "$socialMedia" },
+                isVerified: { $first: "$userDetails.isVerified" },
+                verifiedPlatforms: { $first: "$userDetails.verifiedPlatforms" },
             }
         },
         sort === "rating_desc" ? { $sort: { averageRating: -1 } } : { $sort: { createdAt: -1 } },

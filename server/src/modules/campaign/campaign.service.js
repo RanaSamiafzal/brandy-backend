@@ -348,6 +348,7 @@ const getAllCampaigns = async ({
         "brandUser.fullname": 1,
         "brandUser.profilePic": 1,
         "brandUser.isVerified": 1,
+        "brandUser.verifiedPlatforms": 1,
       },
     },
 

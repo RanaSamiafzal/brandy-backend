@@ -2,13 +2,14 @@ import passport from "passport";
 import GoogleOAuth from "passport-google-oauth20";
 import User from "../modules/user/user.model.js";
 import Brand from "../modules/brand/brand.model.js";
-import Influencer from "../modules/influencer/influencer.model.js";
 
 const { Strategy: GoogleStrategy } = GoogleOAuth;
 
-// Only initialize Google Strategy if credentials are provided
+// ── Strategy 1: Google Sign-In / Sign-Up ─────────────────────────────────────
+// Used for: /auth/google login flow
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(
+    "google",
     new GoogleStrategy(
       {
         clientID: process.env.GOOGLE_CLIENT_ID,
@@ -17,7 +18,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
-          // Check if user already exists
           let user = await User.findOne({ googleId: profile.id });
 
           if (!user) {
@@ -26,15 +26,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
               email: profile.emails?.[0]?.value,
               googleId: profile.id,
               isGoogleUser: true,
-              password: "google-auth-user", // You can hash or make optional in schema
+              password: "google-auth-user",
               role: "brand",
             });
 
-            // For Google users, we default to "brand" and create the profile
             await Brand.create({
               user: user._id,
               brandname: user.fullname || "My Brand",
-              budgetRange: { min: 0, max: 0 }
+              budgetRange: { min: 0, max: 0 },
             });
           }
 

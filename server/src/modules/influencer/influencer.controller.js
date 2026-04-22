@@ -74,22 +74,24 @@ const updateInfluencerProfile = AsyncHandler(async (req, res) => {
         }
     }
 
-    // Handle nested socialMedia object from FormData e.g. socialMedia[instagram]
-    const socialMedia = {};
-    const socialPlatforms = ["instagram", "tiktok", "twitter", "linkedin", "youtube"];
-    let hasSocial = false;
+    // Handle socialMedia object (either from JSON or FormData)
+    let socialMedia = updateData.socialMedia || {};
+    const socialPlatforms = ["instagram", "tiktok", "twitter", "linkedin", "youtube", "facebook"];
+    let hasSocialInRoot = false;
 
+    // Support for FormData style: socialMedia[instagram]
     socialPlatforms.forEach(p => {
         const key = `socialMedia[${p}]`;
         if (updateData[key] !== undefined) {
             socialMedia[p] = updateData[key];
             delete updateData[key];
-            hasSocial = true;
+            hasSocialInRoot = true;
         }
     });
 
-    if (hasSocial) {
+    if (hasSocialInRoot || updateData.socialMediaUpdate) {
         updateData.socialMedia = socialMedia;
+        delete updateData.socialMediaUpdate;
     }
 
     const influencer = await influencerService.updateProfile(req.user._id, updateData);
@@ -99,7 +101,7 @@ const updateInfluencerProfile = AsyncHandler(async (req, res) => {
     const completion = await getCompletionStatus(req.user._id, "influencer");
 
     return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, { influencer, completion }, "Profile updated successfully")
+        new ApiResponse(validationStatus.ok, { influencer, completion, user: req.user }, "Profile updated successfully")
     );
 });
 

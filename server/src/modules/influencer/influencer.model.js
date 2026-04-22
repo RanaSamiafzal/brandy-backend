@@ -105,11 +105,9 @@ const InfluencerSchema = new mongoose.Schema(
       default: 0,
     },
     socialMedia: {
-      instagram: { type: String, default: "" },
-      tiktok: { type: String, default: "" },
-      twitter: { type: String, default: "" },
-      linkedin: { type: String, default: "" },
-      youtube: { type: String, default: "" },
+      type: Map,
+      of: String,
+      default: {},
     },
     location: {
       type: String,

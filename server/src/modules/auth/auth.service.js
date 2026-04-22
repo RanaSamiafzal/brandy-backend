@@ -200,6 +200,62 @@ const changePassword = async (userId, oldPassword, newPassword) => {
     await user.save();
 };
 
+/**
+ * Send Email Verification OTP
+ */
+const sendEmailVerificationOTP = async (userId) => {
+    const user = await User.findById(userId);
+    if (!user) throw new ApiError(validationStatus.notFound, "User not found");
+
+    const otp = user.generateEmailVerificationOTP();
+    await user.save({ validateBeforeSave: false });
+
+    console.log(`\n\n=== EMAIL VERIFICATION OTP FOR ${user.email}: ${otp} ===\n\n`);
+
+    try {
+        await sendEmail({
+            to: user.email,
+            subject: "Verify Your Email - Brandly",
+            html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; rounded: 16px;">
+                    <h2 style="color: #111827; font-weight: 800;">Verify Your Email</h2>
+                    <p style="color: #4b5563;">Use the following OTP to verify your email address. This code expires in 5 minutes.</p>
+                    <div style="background: #f3f4f6; padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">
+                        <span style="font-size: 32px; font-weight: 900; letter-spacing: 5px; color: #2563eb;">${otp}</span>
+                    </div>
+                    <p style="color: #9ca3af; font-size: 12px;">If you didn't request this, please ignore this email.</p>
+                </div>
+            `,
+        });
+    } catch (err) {
+        console.log("Email could not be sent (SMTP issues). OTP printed in console.");
+    }
+};
+
+/**
+ * Verify Email Verification OTP
+ */
+const verifyEmailVerificationOTP = async (userId, otp) => {
+    const user = await User.findById(userId);
+    if (!user) throw new ApiError(validationStatus.notFound, "User not found");
+
+    if (!user.emailVerificationOTPExpires || user.emailVerificationOTPExpires < Date.now()) {
+        throw new ApiError(validationStatus.badRequest, "OTP expired. Please request a new one.");
+    }
+
+    const hashedOTP = crypto.createHash("sha256").update(otp).digest('hex');
+    if (hashedOTP !== user.emailVerificationOTP) {
+        throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+    }
+
+    user.isVerified = true;
+    user.emailVerificationOTP = undefined;
+    user.emailVerificationOTPExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    return user;
+};
+
 export const authService = {
     register,
     login,
@@ -208,4 +264,6 @@ export const authService = {
     forgotPassword,
     resetPassword,
     changePassword,
+    sendEmailVerificationOTP,
+    verifyEmailVerificationOTP,
 };

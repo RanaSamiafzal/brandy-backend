@@ -323,6 +323,26 @@ const getProfile = async (userId) => {
  * Update brand profile
  */
 const updateProfile = async (userId, updateData) => {
+    // Handle socialMedia Map replacement separately to ensure keys can be deleted
+    if (updateData.socialMedia) {
+        console.log(`[BrandService] SYNCING socialMedia for user ${userId}. Data:`, JSON.stringify(updateData.socialMedia));
+        const brandDoc = await Brand.findOne({ user: userId });
+        if (brandDoc) {
+            brandDoc.socialMedia.clear();
+            const entries = Object.entries(updateData.socialMedia);
+            if (entries.length > 0) {
+                entries.forEach(([platform, value]) => {
+                    brandDoc.socialMedia.set(platform, value || "");
+                });
+            }
+            await brandDoc.save({ validateBeforeSave: false });
+            console.log(`[BrandService] Map updated successfully. Current keys:`, Array.from(brandDoc.socialMedia.keys()));
+        } else {
+            console.log(`[BrandService] Brand profile not found during socialMedia sync.`);
+        }
+        delete updateData.socialMedia;
+    }
+
     const brand = await Brand.findOneAndUpdate(
         { user: userId },
         { $set: updateData },
@@ -483,10 +503,11 @@ const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) =>
                 socialMedia: 1,
                 lookingFor: 1,
                 createdAt: 1,
-                "userDoc.fullname": 1,
-                "userDoc.profilePic": 1,
-                "userDoc.isVerified": 1,
-                "userDoc.profileComplete": 1,
+                fullname: "$userDoc.fullname",
+                profilePic: "$userDoc.profilePic",
+                isVerified: "$userDoc.isVerified",
+                verifiedPlatforms: "$userDoc.verifiedPlatforms",
+                profileComplete: "$userDoc.profileComplete",
             },
         },
 

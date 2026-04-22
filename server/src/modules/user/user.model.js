@@ -59,6 +59,8 @@ const UserSchema = new mongoose.Schema(
             type: String, 
             default: "",
         },
+        emailVerificationOTP: String,
+        emailVerificationOTPExpires: Date,
         lastLogin: Date,
         lastActive: {
             type: Date,
@@ -86,11 +88,37 @@ const UserSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        // OAuth verified platforms — stores detailed platform info
+        verifiedPlatforms: [
+            {
+                platform: { type: String, required: true },
+                username: String,
+                platformUserId: String,
+                profileUrl: String,
+                refreshToken: String,
+                tokenExpiry: Date,
+                connected: { type: Boolean, default: true },
+                verified: { type: Boolean, default: true },
+                lastSyncedAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now },
+            },
+        ],
     },
     {
         timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
     }
 )
+
+// Virtual: true if email is verified AND 3 or more platforms are verified
+UserSchema.virtual('isProfileVerified').get(function () {
+    if (!this.isVerified) return false;
+    const vp = this.verifiedPlatforms;
+    if (!vp || vp.length === 0) return false;
+    const count = vp.filter(p => p.verified).length;
+    return count >= 3;
+});
 
 // Passwaord Hashing
 UserSchema.pre("save", async function (next) {
@@ -148,7 +176,23 @@ UserSchema.methods.generatePasswordResetOTP = function () {
     return otp;
 };
 
+UserSchema.methods.generateEmailVerificationOTP = function () {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    this.emailVerificationOTP = crypto
+        .createHash("sha256")
+        .update(otp)
+        .digest("hex");
+    this.emailVerificationOTPExpires = Date.now() + 5 * 60 * 1000;
+    return otp;
+};
+
 UserSchema.index({ role: 1 });
+UserSchema.index({ _id: 1, "verifiedPlatforms.platform": 1 });
+UserSchema.index({ "verifiedPlatforms.platform": 1, "verifiedPlatforms.platformUserId": 1 }, { 
+    unique: true, 
+    sparse: true,
+    partialFilterExpression: { "verifiedPlatforms.verified": true }
+});
 
 const User = mongoose.model("User", UserSchema);
 

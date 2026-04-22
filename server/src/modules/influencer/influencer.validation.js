@@ -21,7 +21,9 @@ const updateProfileSchema = Joi.object({
     recentWork: Joi.any(),
     location: Joi.string().trim().allow(''),
     isAvailable: Joi.boolean(),
-});
+    socialMedia: Joi.any(),
+    socialMediaUpdate: Joi.any(),
+}).unknown(true);
 
 const searchQuerySchema = Joi.object({
     search: Joi.string().allow('').trim(),

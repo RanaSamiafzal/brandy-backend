@@ -4,7 +4,7 @@ import Collaboration from "../collaboration/collaboration.model.js";
 
 const getConversations = async (userId) => {
     let conversations = await Conversation.find({ participants: userId })
-        .populate("participants", "fullname email profilePic role status lastActive")
+        .populate("participants", "fullname email profilePic role status lastActive verifiedPlatforms")
         .populate("campaign", "name image")
         .populate("collaboration", "status")
         .sort({ updatedAt: -1 });
@@ -47,7 +47,7 @@ const getConversations = async (userId) => {
         
         // Final refresh to ensure everything is populated correctly after healing
         conversations = await Conversation.find({ participants: userId })
-            .populate("participants", "fullname email profilePic role status lastActive")
+            .populate("participants", "fullname email profilePic role status lastActive verifiedPlatforms")
             .populate("campaign", "name image")
             .populate("collaboration", "status")
             .sort({ updatedAt: -1 });
@@ -65,7 +65,7 @@ const getMessages = async (conversationId, userId) => {
     }
 
     return await Message.find({ conversationId })
-        .populate("sender", "fullname profilePic")
+        .populate("sender", "fullname profilePic verifiedPlatforms")
         .populate("replyTo")
         .sort({ createdAt: 1 });
 };

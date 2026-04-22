@@ -30,19 +30,17 @@ export const getCompletionStatus = async (userId, role) => {
       if (!inf.about?.trim())      missing.push("Bio / About");
       if (!inf.category?.trim())   missing.push("Content category");
 
-      const hasPlatform = Array.isArray(inf.platforms) && inf.platforms.length > 0;
-      if (!hasPlatform) {
+      const hasSocialMap = inf.socialMedia instanceof Map 
+        ? inf.socialMedia.size > 0 
+        : Object.keys(inf.socialMedia || {}).length > 0;
+      const hasPlatformsArray = Array.isArray(inf.platforms) && inf.platforms.length > 0;
+
+      if (!hasSocialMap && !hasPlatformsArray) {
         missing.push("At least one social platform");
-        missing.push("At least one service with pricing");
-      } else {
-        const hasService = inf.platforms.some(
-          (p) => Array.isArray(p.services) && p.services.length > 0
-        );
-        if (!hasService) missing.push("At least one service with pricing");
       }
     }
 
-    const total = 7; // fullname, profilePic, username, about, category, platform, service
+    const total = 6; // fullname, profilePic, username, about, category, platform
     const completed = Math.max(0, total - missing.length);
     const percent = Math.round((completed / total) * 100);
     return { isComplete: missing.length === 0, percent, missing, completed, total };
@@ -64,9 +62,16 @@ export const getCompletionStatus = async (userId, role) => {
         typeof brand.budgetRange?.max === "number" &&
         brand.budgetRange.max > 0;
       if (!hasBudget) missing.push("Budget range (min & max)");
+      const hasSocialMap = brand.socialMedia instanceof Map 
+        ? brand.socialMedia.size > 0 
+        : Object.keys(brand.socialMedia || {}).length > 0;
+      
+      if (!hasSocialMap) {
+        missing.push("At least one social platform");
+      }
     }
 
-    const total = 6; // fullname, profilePic, brandname, industry, description, budget
+    const total = 7; // fullname, profilePic, brandname, industry, description, budget, platform
     const completed = Math.max(0, total - missing.length);
     const percent = Math.round((completed / total) * 100);
     return { isComplete: missing.length === 0, percent, missing, completed, total };

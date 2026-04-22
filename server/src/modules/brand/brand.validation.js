@@ -13,7 +13,8 @@ const updateProfileSchema = Joi.object({
     lookingFor: Joi.any(),
     lookingForClear: Joi.any(),
     socialMedia: Joi.any(),
-});
+    socialMediaUpdate: Joi.any(),
+}).unknown(true);
 
 export const brandValidation = {
     updateProfileSchema,

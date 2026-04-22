@@ -125,6 +125,26 @@ const updateBrandProfile = AsyncHandler(async (req, res) => {
         if (logoUpload?.url) updateData.logo = logoUpload.url;
     }
 
+    // Handle socialMedia object (either from JSON or FormData)
+    let socialMedia = updateData.socialMedia || {};
+    const socialPlatforms = ["instagram", "tiktok", "twitter", "linkedin", "youtube", "facebook"];
+    let hasSocialInRoot = false;
+
+    // Support for FormData style: socialMedia[instagram]
+    socialPlatforms.forEach(p => {
+        const key = `socialMedia[${p}]`;
+        if (updateData[key] !== undefined) {
+            socialMedia[p] = updateData[key];
+            delete updateData[key];
+            hasSocialInRoot = true;
+        }
+    });
+
+    if (hasSocialInRoot || updateData.socialMediaUpdate) {
+        updateData.socialMedia = socialMedia;
+        delete updateData.socialMediaUpdate;
+    }
+
     const brand = await brandService.updateProfile(req.user._id, updateData);
     console.log(brand);
 
@@ -132,7 +152,7 @@ const updateBrandProfile = AsyncHandler(async (req, res) => {
     const completion = await getCompletionStatus(req.user._id, "brand");
 
     return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, { brand, completion }, "Brand profile updated successfully")
+        new ApiResponse(validationStatus.ok, { brand, completion, user: req.user }, "Brand profile updated successfully")
     );
 });
 

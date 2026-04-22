@@ -128,6 +128,33 @@ const changePassword = AsyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * Send Email Verification OTP
+ */
+const sendOTP = AsyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+    await authService.sendEmailVerificationOTP(userId);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {}, "OTP sent to your email.")
+    );
+});
+
+/**
+ * Verify Email Verification OTP
+ */
+const verifyOTP = AsyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+    const { otp } = req.body;
+    
+    if (!otp) throw new ApiError(validationStatus.badRequest, "OTP is required");
+    
+    await authService.verifyEmailVerificationOTP(userId, otp);
+    
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {}, "Email verified successfully")
+    );
+});
+
 export const authController = {
     register,
     login,
@@ -136,4 +163,6 @@ export const authController = {
     forgotPassword,
     resetPassword,
     changePassword,
+    sendOTP,
+    verifyOTP,
 };
