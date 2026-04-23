@@ -71,8 +71,22 @@ class OAuthService {
             case 'twitter': profileData = await this._verifyTwitter(code); break;
             default: throw new Error('Platform verification handler not implemented');
         }
+        // Strip extended platform data before saving to verifiedPlatforms
+        const { _youtubeData, ...verificationData } = profileData;
 
-        const result = await this._updateUserVerification(userId, { platform, ...profileData, connected: true, verified: true });
+        const result = await this._updateUserVerification(userId, { platform, ...verificationData, connected: true, verified: true });
+
+        // ── Save structured platform data (YouTube) ─────────────────────────────
+        if (platform === 'youtube' && _youtubeData) {
+            try {
+                await User.findByIdAndUpdate(userId, {
+                    'platforms.youtube': _youtubeData
+                });
+                console.log(`[OAuth] YouTube platform data saved for user ${userId}`);
+            } catch (saveErr) {
+                console.error('[OAuth] YouTube data save error (non-fatal):', saveErr.message);
+            }
+        }
 
         // ── Non-Blocking Background Tasks ──────────────────────────────────────
         setImmediate(() => {
@@ -98,8 +112,9 @@ class OAuthService {
     // ────────────────────────────────────────────────────────────────────────────
 
     _handleYouTubeAuthUrl() {
+        console.log("Redirect URI:", process.env.YOUTUBE_CALLBACK_URL);
         const clientID = process.env.YOUTUBE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
-        const callbackUrl = process.env.YOUTUBE_VERIFY_CALLBACK_URL;
+        const callbackUrl = process.env.YOUTUBE_CALLBACK_URL;
         const params = new URLSearchParams({
             client_id: clientID,
             redirect_uri: callbackUrl,
@@ -119,26 +134,113 @@ class OAuthService {
                 code,
                 client_id: process.env.YOUTUBE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
                 client_secret: process.env.YOUTUBE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
-                redirect_uri: process.env.YOUTUBE_VERIFY_CALLBACK_URL,
+                redirect_uri: process.env.YOUTUBE_CALLBACK_URL,
                 grant_type: 'authorization_code',
             }).toString(),
         });
         const tokens = await tokenRes.json();
         if (!tokens.access_token) throw new Error('YouTube token exchange failed');
 
-        const profileRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', {
-            headers: { Authorization: `Bearer ${tokens.access_token}` }
-        });
-        const profile = await profileRes.json();
-        const channel = profile.items?.[0];
+        const authHeader = { Authorization: `Bearer ${tokens.access_token}` };
+
+        // ── Fetch channel snippet + statistics ──────────────────────────────────
+        const channelRes = await fetch(
+            'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true',
+            { headers: authHeader }
+        );
+        const channelData = await channelRes.json();
+        const channel = channelData.items?.[0];
         if (!channel) throw new Error('No YouTube channel found for this account');
 
+        const snippet = channel.snippet;
+        const stats = channel.statistics;
+
+        const subscribers = parseInt(stats.subscriberCount || '0', 10);
+        const totalViews = parseInt(stats.viewCount || '0', 10);
+        const totalVideos = parseInt(stats.videoCount || '0', 10);
+
+        // ── Fetch recent uploads (max 50) ───────────────────────────────────────
+        let videos = [];
+        try {
+            // Step 1: Get the uploads playlist ID
+            const contentRes = await fetch(
+                'https://www.googleapis.com/youtube/v3/channels?part=contentDetails&mine=true',
+                { headers: authHeader }
+            );
+            const contentData = await contentRes.json();
+            const uploadsPlaylistId = contentData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+
+            if (uploadsPlaylistId) {
+                // Step 2: Get video IDs from uploads playlist (max 50)
+                const playlistRes = await fetch(
+                    `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=50`,
+                    { headers: authHeader }
+                );
+                const playlistData = await playlistRes.json();
+                const videoIds = (playlistData.items || [])
+                    .map(item => item.contentDetails?.videoId)
+                    .filter(Boolean);
+
+                if (videoIds.length > 0) {
+                    // Step 3: Get full video statistics
+                    const videoRes = await fetch(
+                        `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoIds.join(',')}`,
+                        { headers: authHeader }
+                    );
+                    const videoData = await videoRes.json();
+
+                    videos = (videoData.items || []).map(v => ({
+                        videoId: v.id,
+                        title: v.snippet?.title || '',
+                        uploadedAt: v.snippet?.publishedAt ? new Date(v.snippet.publishedAt) : null,
+                        views: parseInt(v.statistics?.viewCount || '0', 10),
+                        comments: parseInt(v.statistics?.commentCount || '0', 10),
+                        likes: parseInt(v.statistics?.likeCount || '0', 10),
+                    }));
+                }
+            }
+        } catch (videoErr) {
+            console.error('[YouTube] Video fetch error (non-fatal):', videoErr.message);
+            // Videos are non-critical — proceed with channel data
+        }
+
+        // ── Compute engagement metrics ──────────────────────────────────────────
+        const avgViews = totalVideos > 0 ? Math.round(totalViews / totalVideos) : 0;
+
+        let engagementRate = 0;
+        const videosWithViews = videos.filter(v => v.views > 0);
+        if (videosWithViews.length > 0) {
+            const totalEngagement = videosWithViews.reduce((sum, v) => {
+                return sum + ((v.likes + v.comments) / v.views);
+            }, 0);
+            engagementRate = parseFloat((totalEngagement / videosWithViews.length * 100).toFixed(2));
+        }
+
         return {
-            username: channel.snippet.title,
+            // Fields for verifiedPlatforms (existing system)
+            username: snippet.title,
             platformUserId: channel.id,
             profileUrl: `https://youtube.com/channel/${channel.id}`,
             refreshToken: tokens.refresh_token || null,
-            tokenExpiry: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null
+            tokenExpiry: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null,
+
+            // Extended platform data for platforms.youtube storage
+            _youtubeData: {
+                channelId: channel.id,
+                title: snippet.title,
+                description: (snippet.description || '').substring(0, 500),
+                customUrl: snippet.customUrl || null,
+                thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url || '',
+                country: snippet.country || null,
+                channelCreatedAt: snippet.publishedAt ? new Date(snippet.publishedAt) : null,
+                subscribers,
+                totalViews,
+                totalVideos,
+                avgViews,
+                engagementRate,
+                lastUpdated: new Date(),
+                videos,
+            },
         };
     }
 

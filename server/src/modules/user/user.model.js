@@ -103,6 +103,38 @@ const UserSchema = new mongoose.Schema(
                 updatedAt: { type: Date, default: Date.now },
             },
         ],
+        // Structured platform data for analytics & frontend display
+        platforms: {
+            youtube: {
+                channelId: String,
+                title: String,
+                description: String,
+                customUrl: String,
+                thumbnail: String,
+                country: String,
+                channelCreatedAt: Date,
+
+                subscribers: { type: Number, default: 0 },
+                totalViews: { type: Number, default: 0 },
+                totalVideos: { type: Number, default: 0 },
+
+                avgViews: { type: Number, default: 0 },
+                engagementRate: { type: Number, default: 0 },
+
+                lastUpdated: Date,
+
+                videos: [
+                    {
+                        videoId: String,
+                        title: String,
+                        uploadedAt: Date,
+                        views: { type: Number, default: 0 },
+                        comments: { type: Number, default: 0 },
+                        likes: { type: Number, default: 0 },
+                    },
+                ],
+            },
+        },
     },
     {
         timestamps: true,

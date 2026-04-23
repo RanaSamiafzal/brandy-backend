@@ -1,12 +1,11 @@
-import connectDB from "./config/db.js";
 import dotenv from 'dotenv'
-import { createServer } from "http";
-import { Server } from "socket.io";
-import User from "./modules/user/user.model.js";
-
 dotenv.config({
     path:'.env'
 })
+import connectDB from "./config/db.js";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import User from "./modules/user/user.model.js";
 import {app} from './app.js'
 import initializeSocket from "./config/socket.js";
 

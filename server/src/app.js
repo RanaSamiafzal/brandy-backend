@@ -11,6 +11,7 @@ import collaborationRouter from './modules/collaboration/collaboration.routes.js
 import activityRouter from './modules/activity/activity.routes.js'
 import messageRouter from './modules/message/message.routes.js'
 import oauthRouter from './modules/oauth/oauth.routes.js'
+import platformRouter from './modules/platform/platform.routes.js'
 import { errorMiddleware } from './middleware/errorMiddleware.js';
 
 
@@ -50,6 +51,7 @@ app.use('/api/v1/collaborations', collaborationRouter)
 app.use('/api/v1/activities', activityRouter)
 app.use('/api/v1/messages', messageRouter)
 app.use('/api/v1/oauth', oauthRouter)
+app.use('/api/v1/platforms', platformRouter)
 
 app.get('/api/v1/ping', (req, res) => res.json({
     status: 'ok',
