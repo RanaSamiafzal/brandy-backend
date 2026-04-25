@@ -6,6 +6,9 @@ import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import mongoose from "mongoose";
 import { emitActivity } from "../../utils/activityUtils.js";
 import User from "../user/user.model.js";
+import Brand from "../brand/brand.model.js";
+import Influencer from "../influencer/influencer.model.js";
+import Review from "./review.model.js";
 import { messageService } from "../message/message.service.js";
 
 /**
@@ -18,11 +21,28 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
         if (!campaign) throw new ApiError(validationStatus.notFound, "Campaign not found or access denied");
     }
 
+    // Safety: If receiverId is an Influencer/Brand ID instead of User ID, resolve it
+    let targetReceiverId = receiverId;
+    const userCheck = await User.findById(receiverId).select("_id");
+    if (!userCheck) {
+        // Check if it's an Influencer ID
+        const Influencer = mongoose.model("Influencer");
+        const inf = await Influencer.findById(receiverId).select("user");
+        if (inf) {
+            targetReceiverId = inf.user;
+        } else {
+            // Check if it's a Brand ID
+            const Brand = mongoose.model("Brand");
+            const brand = await Brand.findById(receiverId).select("user");
+            if (brand) targetReceiverId = brand.user;
+        }
+    }
+
     // Check for existing pending or accepted request for this campaign between these two users
     const existingRequest = await CollaborationRequest.findOne({
         $or: [
-            { sender: senderId, receiver: receiverId },
-            { sender: receiverId, receiver: senderId }
+            { sender: senderId, receiver: targetReceiverId },
+            { sender: targetReceiverId, receiver: senderId }
         ],
         campaign: campaignId,
         status: { $in: ["pending", "accepted"] }
@@ -38,7 +58,7 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
     const request = await CollaborationRequest.create({
         initiatedBy,
         sender: senderId,
-        receiver: receiverId,
+        receiver: targetReceiverId,
         campaign: campaignId,
         proposedBudget,
         note,
@@ -65,21 +85,30 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
 /**
  * Get collaboration requests for a user
  */
-const getRequests = async (userId, { status, type, platform, page = 1, limit = 10 }) => {
+const getRequests = async (userId, { status, type, platform, page = 1, limit = 10, search }) => {
     const skip = (page - 1) * limit;
     
     // Base match based on type
     let matchStage = {};
     const objectUserId = new mongoose.Types.ObjectId(userId.toString());
+    
+    // Support both User ID and Role (Influencer/Brand) IDs for maximum visibility
+    const influencer = await Influencer.findOne({ user: objectUserId }).select("_id");
+    const brand = await Brand.findOne({ user: objectUserId }).select("_id");
+    const allIdentities = Array.from(new Set([
+        objectUserId,
+        ...(influencer ? [influencer._id] : []),
+        ...(brand ? [brand._id] : [])
+    ]));
 
     if (type === "sent") {
-        matchStage.sender = objectUserId;
+        matchStage.sender = { $in: allIdentities };
     } else if (type === "received") {
-        matchStage.receiver = objectUserId;
+        matchStage.receiver = { $in: allIdentities };
     } else {
         matchStage.$or = [
-            { sender: objectUserId },
-            { receiver: objectUserId }
+            { sender: { $in: allIdentities } },
+            { receiver: { $in: allIdentities } }
         ];
     }
 
@@ -148,8 +177,8 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
             },
         },
         { $unwind: { path: "$campaignDetails", preserveNullAndEmptyArrays: true } },
-        // Filter out requests for deleted campaigns
-        { $match: { "campaignDetails.isDeleted": false } },
+        // Filter out requests for deleted campaigns, but allow null if lookup failed (shouldn't happen but safe)
+        { $match: { "campaignDetails.isDeleted": { $ne: true } } },
         // Join with Influencer Profile (for whoever is the influencer)
         {
             $lookup: {
@@ -219,6 +248,19 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
                 brandDetails: { $arrayElemAt: ["$brandProfile", 0] },
             },
         },
+        // Search filter (Post-Lookup)
+        ...(search ? [
+            {
+                $match: {
+                    $or: [
+                        { "campaignDetails.name": { $regex: search, $options: "i" } },
+                        { "senderDetails.fullname": { $regex: search, $options: "i" } },
+                        { "receiverDetails.fullname": { $regex: search, $options: "i" } },
+                        { "influencerDetails.username": { $regex: search, $options: "i" } }
+                    ]
+                }
+            }
+        ] : []),
         // Join with Collaboration to get ID if accepted
         {
             $lookup: {
@@ -247,17 +289,17 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
     // Separate counts for tabs (Sent vs Received)
     // Separate counts for tabs (Sent vs Received) - Must respect campaign deletion
     const sentCountResult = await CollaborationRequest.aggregate([
-        { $match: { sender: objectUserId } },
+        { $match: { sender: { $in: allIdentities } } },
         { $lookup: { from: "campaigns", localField: "campaign", foreignField: "_id", as: "campaignInfo" } },
-        { $unwind: "$campaignInfo" },
-        { $match: { "campaignInfo.isDeleted": false } },
+        { $unwind: { path: "$campaignInfo", preserveNullAndEmptyArrays: true } },
+        { $match: { "campaignInfo.isDeleted": { $ne: true } } },
         { $count: "count" }
     ]);
     const receivedCountResult = await CollaborationRequest.aggregate([
-        { $match: { receiver: objectUserId } },
+        { $match: { receiver: { $in: allIdentities } } },
         { $lookup: { from: "campaigns", localField: "campaign", foreignField: "_id", as: "campaignInfo" } },
-        { $unwind: "$campaignInfo" },
-        { $match: { "campaignInfo.isDeleted": false } },
+        { $unwind: { path: "$campaignInfo", preserveNullAndEmptyArrays: true } },
+        { $match: { "campaignInfo.isDeleted": { $ne: true } } },
         { $count: "count" }
     ]);
 
@@ -372,6 +414,12 @@ const acceptRequest = async (requestId, userId) => {
         request.campaign, 
         collaboration._id
     );
+    
+    // 5. Update campaign status to perfectly sync with the new collaboration's status ('active')
+    if (campaign && campaign.status !== 'active') {
+        campaign.status = 'active';
+        await campaign.save();
+    }
 
     return { request, collaboration };
 };
@@ -431,8 +479,20 @@ const updateCollaborationStatus = async (id, userId, status, reason = "") => {
     }
 
     collaboration.status = status;
-    if (reason) collaboration.cancellationReason = reason;
+    if (status === "cancelled") {
+        collaboration.cancellationReason = reason || "No reason provided";
+        collaboration.cancelledBy = userId;
+    }
     await collaboration.save();
+
+    // Sync campaign status exactly with collaboration status
+    if (collaboration.campaign) {
+        const campaign = await Campaign.findById(collaboration.campaign);
+        if (campaign) {
+            campaign.status = status;
+            await campaign.save();
+        }
+    }
 
     // Notify the other party
     const targetUserId = isBrand ? collaboration.influencer : collaboration.brand;
@@ -503,6 +563,16 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
             }
         },
         { $unwind: { path: "$campaignDetails", preserveNullAndEmptyArrays: true } },
+        // Join with Review
+        {
+            $lookup: {
+                from: "reviews",
+                localField: "review",
+                foreignField: "_id",
+                as: "reviewDetails"
+            }
+        },
+        { $unwind: { path: "$reviewDetails", preserveNullAndEmptyArrays: true } },
         // Project final structure
         {
             $project: {
@@ -557,7 +627,8 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
                 },
                 startDate: 1,
                 endDate: 1,
-                paymentStatus: 1
+                paymentStatus: 1,
+                review: "$reviewDetails"
             }
         },
         {
@@ -598,6 +669,7 @@ const getCollaborationDetails = async (id, userId) => {
     .populate("brand", "fullname email profilePic")
     .populate("influencer", "fullname username email profilePic")
     .populate("campaign", "name description image platform endDate")
+    .populate({ path: "review", model: "Review" })
     .lean();
 
     if (!collaboration) {
@@ -608,14 +680,240 @@ const getCollaborationDetails = async (id, userId) => {
     const Influencer = mongoose.model("Influencer");
     const influencerProfile = await Influencer.findOne({ user: collaboration.influencer._id }).select("followersCount platforms");
     
-    if (influencerProfile) {
-        // Calculate average engagement rate from platforms or use a default
-        const mainPlatform = influencerProfile.platforms?.[0];
-        collaboration.influencerStats = {
-            followersCount: influencerProfile.followersCount || 0,
-            engagementRate: mainPlatform?.influenceRate ? (mainPlatform.influenceRate * 1.2).toFixed(1) + "%" : "4.5%"
-        };
+    return collaboration;
+};
+
+/**
+ * Submit an action request (CANCEL, COMPLETE, RESUME)
+ */
+const submitActionRequest = async (id, userId, { type, reason }) => {
+    const collaboration = await Collaboration.findById(id);
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    const isBrand = collaboration.brand.toString() === userId.toString();
+    const isInfluencer = collaboration.influencer.toString() === userId.toString();
+
+    if (!isBrand && !isInfluencer) throw new ApiError(validationStatus.forbidden, "Access denied");
+
+    // Don't allow multiple pending requests
+    if (collaboration.actionRequest?.status === "PENDING") {
+        throw new ApiError(validationStatus.badRequest, "There is already a pending request for this collaboration");
     }
+
+    // Completion request requires all deliverables to be APPROVED/DELIVERED
+    if (type === "COMPLETE") {
+        const total = collaboration.deliverables?.length || 0;
+        const approved = collaboration.deliverables?.filter(d => 
+            ["APPROVED", "DELIVERED"].includes(d.status)
+        ).length || 0;
+        
+        if (total > 0 && approved < total) {
+            throw new ApiError(validationStatus.badRequest, "Cannot request completion until all deliverables are approved");
+        }
+    }
+
+    collaboration.actionRequest = {
+        type,
+        requestedBy: userId,
+        reason,
+        status: "PENDING",
+        requestedAt: new Date()
+    };
+
+    await collaboration.save();
+
+    // Notify the other party
+    const targetUserId = isBrand ? collaboration.influencer : collaboration.brand;
+    const targetRole = isBrand ? "influencer" : "brand";
+    
+    await emitActivity({
+        user: targetUserId,
+        role: targetRole,
+        type: `collab_request_${type.toLowerCase()}`,
+        title: `${type.charAt(0).toUpperCase() + type.slice(1).toLowerCase()} Request`,
+        description: `The ${isBrand ? 'brand' : 'influencer'} has requested to ${type.toLowerCase()} the collaboration. Reason: ${reason}`,
+        relatedId: collaboration._id,
+        category: 'collaboration'
+    });
+
+    return collaboration;
+};
+
+/**
+ * Handle an action request (Approve/Reject)
+ */
+const handleActionRequest = async (id, userId, { decision, reviewData = null }) => {
+    const collaboration = await Collaboration.findById(id).populate("brand influencer");
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    if (!collaboration.actionRequest || collaboration.actionRequest.status !== "PENDING") {
+        throw new ApiError(validationStatus.badRequest, "No pending request found");
+    }
+
+    // Only the party who DID NOT request it can handle it
+    if (collaboration.actionRequest.requestedBy.toString() === userId.toString()) {
+        throw new ApiError(validationStatus.forbidden, "You cannot approve your own request");
+    }
+
+    const { type, reason, requestedBy } = collaboration.actionRequest;
+
+    if (decision === "REJECTED") {
+        collaboration.actionRequest.status = "REJECTED";
+        await collaboration.save();
+        
+        await emitActivity({
+            user: requestedBy,
+            role: userId === collaboration.brand._id.toString() ? "influencer" : "brand",
+            type: "collab_request_rejected",
+            title: "Request Rejected",
+            description: `Your request to ${type.toLowerCase()} was rejected.`,
+            relatedId: collaboration._id,
+            category: "collaboration"
+        });
+        
+        return collaboration;
+    }
+
+    // APPROVAL LOGIC
+    const updateData = {
+        "actionRequest.status": "APPROVED"
+    };
+
+    if (type === "CANCEL") {
+        updateData.status = "cancelled";
+        updateData.cancellationReason = reason;
+        updateData.cancelledBy = requestedBy;
+    } else if (type === "COMPLETE") {
+        updateData.status = "completed";
+        updateData.completedAt = new Date();
+        updateData.completedBy = requestedBy;
+        
+        // If review data was provided in the approval step (for brand)
+        if (reviewData && reviewData.rating) {
+            const review = await Review.create({
+                reviewer: userId, // The brand who is approving
+                reviewee: requestedBy, // The influencer who requested completion
+                collaboration: collaboration._id,
+                rating: reviewData.rating,
+                comment: reviewData.comment || "",
+                role: "brand"
+            });
+            updateData.review = review._id;
+            
+            // Update influencer average rating
+            const influencerProfile = await Influencer.findOne({ user: requestedBy });
+            if (influencerProfile) {
+                const allReviews = await Review.find({ reviewee: requestedBy, role: "brand" });
+                const avg = allReviews.reduce((acc, r) => acc + r.rating, 0) / allReviews.length;
+                influencerProfile.averageRating = parseFloat(avg.toFixed(1));
+                await influencerProfile.save();
+            }
+        }
+    } else if (type === "RESUME") {
+        updateData.status = "active";
+    }
+
+    const updatedCollab = await Collaboration.findByIdAndUpdate(id, updateData, { new: true })
+        .populate("brand influencer campaign review");
+
+    await emitActivity({
+        user: requestedBy,
+        role: userId === collaboration.brand._id.toString() ? "influencer" : "brand",
+        type: "collab_request_approved",
+        title: "Request Approved",
+        description: `Your request to ${type.toLowerCase()} has been approved. Status is now: ${updatedCollab.status}`,
+        relatedId: updatedCollab._id,
+        category: "collaboration"
+    });
+
+    // Sync campaign status
+    if (updatedCollab.campaign) {
+        const campaign = await Campaign.findById(updatedCollab.campaign._id || updatedCollab.campaign);
+        if (campaign) {
+            if (type === "COMPLETE") campaign.status = "completed";
+            else if (type === "CANCEL") campaign.status = "cancelled";
+            else if (type === "RESUME") campaign.status = "in_progress";
+            await campaign.save();
+        }
+    }
+
+    return collaboration;
+};
+
+/**
+ * Finalize/Complete collaboration with review
+ */
+const completeCollaboration = async (id, userId, reviewData) => {
+    const collaboration = await Collaboration.findById(id).populate("brand influencer campaign");
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    const isBrand = collaboration.brand._id.toString() === userId.toString();
+    if (!isBrand) throw new ApiError(validationStatus.forbidden, "Only brands can finalize completion and leave reviews");
+
+    // Completion requires all deliverables to be APPROVED
+    const total = collaboration.deliverables?.length || 0;
+    const approved = collaboration.deliverables?.filter(d => 
+        ["APPROVED", "DELIVERED", "SUBMITTED"].includes(d.status) // Be slightly flexible or strict? strict is better
+    ).length || 0;
+    
+    // Check if there are deliverables at all. If yes, they must be approved.
+    const allApproved = collaboration.deliverables.every(d => ["APPROVED", "DELIVERED"].includes(d.status));
+
+    if (collaboration.deliverables.length > 0 && !allApproved) {
+        throw new ApiError(validationStatus.badRequest, "Cannot complete until all deliverables are approved");
+    }
+
+    // Create Review if provided
+    let reviewId = null;
+    if (reviewData && reviewData.rating) {
+        const review = await Review.create({
+            reviewer: userId,
+            reviewee: collaboration.influencer._id,
+            collaboration: collaboration._id,
+            rating: reviewData.rating,
+            comment: reviewData.comment || "",
+            role: "brand"
+        });
+        reviewId = review._id;
+    }
+
+    const updatedCollab = await Collaboration.findByIdAndUpdate(id, {
+        status: "completed",
+        completedAt: new Date(),
+        completedBy: userId,
+        actionRequest: { type: "NONE", status: "IDLE" },
+        review: reviewId
+    }, { new: true });
+
+    // Sync campaign status
+    if (updatedCollab.campaign) {
+        const campaign = await Campaign.findById(updatedCollab.campaign);
+        if (campaign) {
+            campaign.status = "completed";
+            await campaign.save();
+        }
+    }
+    
+    // Update influencer average rating
+    if (reviewId) {
+        const influencerProfile = await Influencer.findOne({ user: collaboration.influencer._id });
+        if (influencerProfile) {
+            const allReviews = await Review.find({ reviewee: collaboration.influencer._id, role: "brand" });
+            const avg = allReviews.reduce((acc, r) => acc + r.rating, 0) / allReviews.length;
+            influencerProfile.averageRating = parseFloat(avg.toFixed(1));
+            await influencerProfile.save();
+        }
+    }
+
+    await emitActivity({
+        user: collaboration.influencer._id,
+        role: "influencer",
+        type: "collaboration_completed",
+        title: "Collaboration Completed",
+        description: `The brand has marked the collaboration as completed. Thank you for your work!`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
 
     return collaboration;
 };
@@ -667,6 +965,19 @@ const updateDeliverable = async (collaborationId, deliverableId, userId, updateD
 
     Object.assign(deliverable, updateData);
     await collaboration.save();
+
+    // Notify the other party
+    const targetUserId = isBrand ? collaboration.influencer : collaboration.brand;
+    await emitActivity({
+        user: targetUserId,
+        role: isBrand ? "influencer" : "brand",
+        type: "deliverable_updated",
+        title: "Deliverable Updated",
+        description: `A deliverable in "${collaboration.title || 'your project'}" has been updated.`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
+
     return collaboration;
 };
 
@@ -689,6 +1000,17 @@ const submitDeliverable = async (collaborationId, deliverableId, userId, submiss
     deliverable.submittedAt = new Date();
     
     await collaboration.save();
+
+    await emitActivity({
+        user: collaboration.brand,
+        role: "brand",
+        type: "deliverable_submitted",
+        title: "Deliverable Submitted",
+        description: `The influencer has submitted a deliverable for "${collaboration.title || 'your project'}".`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
+
     return collaboration;
 };
 
@@ -715,6 +1037,19 @@ const reviewDeliverable = async (collaborationId, deliverableId, userId, { statu
     if (status === "APPROVED") deliverable.approvedAt = new Date();
 
     await collaboration.save();
+
+    await emitActivity({
+        user: collaboration.influencer,
+        role: "influencer",
+        type: status === "APPROVED" ? "deliverable_approved" : "deliverable_revision_requested",
+        title: status === "APPROVED" ? "Deliverable Approved" : "Revision Requested",
+        description: status === "APPROVED" 
+            ? `Your deliverable for "${collaboration.title || 'your project'}" was approved!` 
+            : `The brand requested a revision for a deliverable in "${collaboration.title || 'your project'}".`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
+
     return collaboration;
 };
 
@@ -776,11 +1111,14 @@ export const collaborationService = {
     updateRequestStatus,
     getCollaborations,
     getCollaborationDetails,
-    getLatestCollaborationWithUser, // Added
+    getLatestCollaborationWithUser,
     updateCollaborationStatus,
     addDeliverable,
     updateDeliverable,
     submitDeliverable,
     reviewDeliverable,
     deleteDeliverable,
+    submitActionRequest,
+    handleActionRequest,
+    completeCollaboration,
 };

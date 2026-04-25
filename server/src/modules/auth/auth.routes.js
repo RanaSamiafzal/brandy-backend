@@ -42,4 +42,7 @@ router.get("/youtube/callback", (req, res, next) => {
     oauthController.callback(req, res, next);
 });
 
+router.get("/facebook", authController.facebookConnect);
+router.get("/facebook/callback", authController.facebookCallback);
+
 export default router;

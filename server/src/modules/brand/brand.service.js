@@ -325,14 +325,26 @@ const getProfile = async (userId) => {
 const updateProfile = async (userId, updateData) => {
     // Handle socialMedia Map replacement separately to ensure keys can be deleted
     if (updateData.socialMedia) {
+        // Safety: parse if it's still a JSON string
+        if (typeof updateData.socialMedia === 'string') {
+            try {
+                updateData.socialMedia = JSON.parse(updateData.socialMedia);
+            } catch (e) {
+                updateData.socialMedia = {};
+            }
+        }
         console.log(`[BrandService] SYNCING socialMedia for user ${userId}. Data:`, JSON.stringify(updateData.socialMedia));
         const brandDoc = await Brand.findOne({ user: userId });
         if (brandDoc) {
             brandDoc.socialMedia.clear();
+            const validPlatforms = ["instagram", "tiktok", "twitter", "linkedin", "youtube", "facebook"];
             const entries = Object.entries(updateData.socialMedia);
             if (entries.length > 0) {
                 entries.forEach(([platform, value]) => {
-                    brandDoc.socialMedia.set(platform, value || "");
+                    // Only set valid platform keys, skip corrupted numeric indices
+                    if (validPlatforms.includes(platform.toLowerCase())) {
+                        brandDoc.socialMedia.set(platform.toLowerCase(), value || "");
+                    }
                 });
             }
             await brandDoc.save({ validateBeforeSave: false });

@@ -122,11 +122,20 @@ const updateBrandProfile = AsyncHandler(async (req, res) => {
 
     if (req.files?.logo?.[0]?.path) {
         const logoUpload = await uploadOnCloudinary(req.files.logo[0].path);
-        if (logoUpload?.url) updateData.logo = logoUpload.url;
+        if (logoUpload?.secure_url) updateData.logo = logoUpload.secure_url;
     }
 
     // Handle socialMedia object (either from JSON or FormData)
-    let socialMedia = updateData.socialMedia || {};
+    let socialMedia = updateData.socialMedia;
+    if (typeof socialMedia === 'string') {
+        try {
+            socialMedia = JSON.parse(socialMedia);
+        } catch (e) {
+            socialMedia = {};
+        }
+    } else {
+        socialMedia = socialMedia || {};
+    }
     const socialPlatforms = ["instagram", "tiktok", "twitter", "linkedin", "youtube", "facebook"];
     let hasSocialInRoot = false;
 

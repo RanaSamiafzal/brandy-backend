@@ -77,11 +77,31 @@ const InfluencerSchema = new mongoose.Schema(
         ],
       },
     ],
-    portfolio: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+    portfolio: [
+      {
+        type: {
+          type: String, // 'link' or 'file'
+          enum: ["link", "file"],
+          required: true,
+        },
+        url: {
+          type: String,
+          required: true,
+        },
+        title: {
+          type: String,
+          default: "",
+        },
+        fileSize: {
+          type: Number,
+          default: 0,
+        },
+        format: {
+          type: String,
+          default: "",
+        },
+      },
+    ],
     resume: {
       type: String,
       default: "",
@@ -126,6 +146,10 @@ InfluencerSchema.index({ category: 1 });
 InfluencerSchema.index({ location: 1 });
 InfluencerSchema.index({ averageRating: -1 });
 InfluencerSchema.index({ "platforms.name": 1 });
+
+// Indexes optimized for AI Matching (Layer 1 Filtering)
+InfluencerSchema.index({ category: 1, "platforms.name": 1 });
+InfluencerSchema.index({ "platforms.services.price": 1 });
 
 const Influencer = mongoose.model("Influencer", InfluencerSchema);
 

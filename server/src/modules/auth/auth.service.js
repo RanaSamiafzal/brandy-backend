@@ -12,17 +12,33 @@ import Influencer from "../influencer/influencer.model.js";
  */
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
+        console.log(`Finding user ${userId} for token generation`);
         const user = await User.findById(userId);
         if (!user) throw new ApiError(validationStatus.notFound, "User not found");
 
+        console.log(`Generating access token for ${user.email}`);
         const accessToken = user.generateAccessToken();
+        console.log(`Generating refresh token for ${user.email}`);
         const refreshToken = user.generateRefreshToken();
 
-        user.refreshToken = refreshToken;
-        await user.save({ validateBeforeSave: false });
+        // Use a targeted update instead of user.save() to avoid Mongoose casting
+        // the 'platforms' field on documents that don't have it yet, which causes
+        // the MongoDB error: "Cannot create field 'youtube' in element {platforms: []}"
+        console.log(`Saving refresh token to database for ${user.email}`);
+        await User.findByIdAndUpdate(
+            userId,
+            { $set: { refreshToken } },
+            { new: true }
+        );
 
         return { accessToken, refreshToken };
     } catch (error) {
+        console.error("Error in generateAccessAndRefreshTokens:", error);
+        
+        if (error instanceof ApiError) {
+            throw error;
+        }
+
         throw new ApiError(
             validationStatus.internalError,
             error.message || "Something went wrong while generating tokens"
@@ -76,26 +92,37 @@ const register = async (userData) => {
  * Login user
  */
 const login = async (email, password) => {
-    const user = await User.findOne({ email });
-    if (!user) {
-        throw new ApiError(validationStatus.notFound, "User does not exist");
+    try {
+        console.log(`Login attempt for email: ${email}`);
+        const user = await User.findOne({ email });
+        if (!user) {
+            console.log(`User not found: ${email}`);
+            throw new ApiError(validationStatus.notFound, "User does not exist");
+        }
+
+        const isPasswordValid = await user.isPasswordCorrect(password);
+        if (!isPasswordValid) {
+            console.log(`Invalid password for user: ${email}`);
+            throw new ApiError(validationStatus.unauthorized, "Invalid credentials");
+        }
+
+        // Auto-reactivate if account was deactivated
+        if (user.isDeactivated) {
+            console.log(`Reactivating account for: ${email}`);
+            user.isDeactivated = false;
+            await user.save({ validateBeforeSave: false });
+        }
+
+        console.log(`Generating tokens for user: ${user._id}`);
+        const tokens = await generateAccessAndRefreshTokens(user._id);
+        const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+
+        console.log(`Login successful for user: ${email}`);
+        return { user: loggedInUser, ...tokens };
+    } catch (error) {
+        console.error("Login Error:", error);
+        throw error;
     }
-
-    const isPasswordValid = await user.isPasswordCorrect(password);
-    if (!isPasswordValid) {
-        throw new ApiError(validationStatus.unauthorized, "Invalid credentials");
-    }
-
-    // Auto-reactivate if account was deactivated
-    if (user.isDeactivated) {
-        user.isDeactivated = false;
-        await user.save({ validateBeforeSave: false });
-    }
-
-    const tokens = await generateAccessAndRefreshTokens(user._id);
-    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
-
-    return { user: loggedInUser, ...tokens };
 };
 
 /**
@@ -256,6 +283,89 @@ const verifyEmailVerificationOTP = async (userId, otp) => {
     return user;
 };
 
+/**
+ * GET Facebook Auth URL
+ */
+const getFacebookAuthUrl = () => {
+    const params = new URLSearchParams({
+        client_id: process.env.META_APP_ID,
+        redirect_uri: process.env.META_CALLBACK_URL,
+        scope: 'email,public_profile,pages_show_list,instagram_basic',
+        response_type: 'code',
+    });
+    return `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
+};
+
+/**
+ * Handle Facebook Callback
+ */
+const handleFacebookCallback = async (code) => {
+    // 1. Exchange code for access token
+    const tokenRes = await fetch('https://graph.facebook.com/v18.0/oauth/access_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            client_id: process.env.META_APP_ID,
+            client_secret: process.env.META_APP_SECRET,
+            redirect_uri: process.env.META_CALLBACK_URL,
+            code,
+        }),
+    });
+    
+    const tokens = await tokenRes.json();
+    if (!tokens.access_token) {
+        const errorMsg = tokens.error ? tokens.error.message : 'Facebook token exchange failed';
+        throw new ApiError(validationStatus.badRequest, errorMsg);
+    }
+
+    const accessToken = tokens.access_token;
+
+    // 2. Fetch User Pages
+    const pagesRes = await fetch(`https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`);
+    const pagesData = await pagesRes.json();
+    
+    if (pagesData.error) {
+        throw new ApiError(validationStatus.badRequest, `Failed to fetch Facebook pages: ${pagesData.error.message}`);
+    }
+    
+    if (!pagesData.data || pagesData.data.length === 0) {
+        throw new ApiError(validationStatus.notFound, 'No Facebook pages found for this user');
+    }
+
+    // 3. Find page with Instagram Business Account
+    let igAccountId = null;
+
+    for (const page of pagesData.data) {
+        const pageId = page.id;
+        const pageIgRes = await fetch(`https://graph.facebook.com/v18.0/${pageId}?fields=instagram_business_account&access_token=${accessToken}`);
+        
+        const pageIgData = await pageIgRes.json();
+        
+        if (pageIgData.instagram_business_account) {
+            igAccountId = pageIgData.instagram_business_account.id;
+            break;
+        }
+    }
+
+    if (!igAccountId) {
+        throw new ApiError(validationStatus.notFound, 'No connected Instagram Business account found on your Facebook pages');
+    }
+
+    // 4. Fetch Instagram Profile
+    const igProfileRes = await fetch(`https://graph.facebook.com/v18.0/${igAccountId}?fields=username,followers_count,media_count&access_token=${accessToken}`);
+    
+    const igProfileData = await igProfileRes.json();
+    if (igProfileData.error) {
+        throw new ApiError(validationStatus.badRequest, `Failed to fetch Instagram profile: ${igProfileData.error.message}`);
+    }
+
+    return {
+        username: igProfileData.username,
+        followers: igProfileData.followers_count || 0,
+        media_count: igProfileData.media_count || 0
+    };
+};
+
 export const authService = {
     register,
     login,
@@ -266,4 +376,6 @@ export const authService = {
     changePassword,
     sendEmailVerificationOTP,
     verifyEmailVerificationOTP,
+    getFacebookAuthUrl,
+    handleFacebookCallback,
 };

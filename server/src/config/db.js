@@ -7,9 +7,15 @@ const connectDB = async () => {
             throw new Error("MONGODB_URI is not defined in environment variables. Check your .env file.");
         }
 
-        const uri = process.env.MONGODB_URI.endsWith('/') 
-            ? `${process.env.MONGODB_URI}${DB_Name}`
-            : `${process.env.MONGODB_URI}/${DB_Name}`;
+        let uri = process.env.MONGODB_URI;
+        if (uri.includes('?')) {
+            const [base, query] = uri.split('?');
+            const separator = base.endsWith('/') ? '' : '/';
+            uri = `${base}${separator}${DB_Name}?${query}`;
+        } else {
+            const separator = uri.endsWith('/') ? '' : '/';
+            uri = `${uri}${separator}${DB_Name}`;
+        }
 
         const Dbconnection = await mongoose.connect(uri);
         console.log(`\n MongoDB connected !! DB HOST : ${Dbconnection.connection.host}`);

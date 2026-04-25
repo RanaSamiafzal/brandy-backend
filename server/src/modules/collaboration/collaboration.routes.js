@@ -31,6 +31,21 @@ router.route("/:id/cancel")
 router.route("/:id/complete")
     .patch(collaborationController.completeCollaboration);
 
+router.route("/:id/pause")
+    .patch(collaborationController.pauseCollaboration);
+
+router.route("/:id/resume")
+    .patch(collaborationController.resumeCollaboration);
+
+router.route("/:id/suspend")
+    .patch(collaborationController.suspendCollaboration);
+
+router.route("/:id/request-action")
+    .post(collaborationController.submitActionRequest);
+
+router.route("/:id/handle-action")
+    .post(collaborationController.handleActionRequest);
+
 // Deliverables management
 router.route("/:id/deliverables")
     .post(collaborationController.addDeliverable);

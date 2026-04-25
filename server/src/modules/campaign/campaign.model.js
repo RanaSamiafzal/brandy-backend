@@ -70,7 +70,7 @@ const CampaignSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'active', 'completed', 'paused', 'draft', 'cancelled'],
+    enum: ['pending', 'active', 'in_progress', 'review', 'completed', 'paused', 'draft', 'cancelled'],
     default: 'pending',
   },
   cancelReason: {

@@ -12,6 +12,9 @@ const errorMiddleware = (err, req, res, next) => {
         message = err.message || "Internal Server Error";
     }
 
+    // Log the error for debugging
+    console.error("API ERROR:", err);
+
     const response = {
         success: false,
         message,

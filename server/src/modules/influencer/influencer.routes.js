@@ -21,7 +21,12 @@ router.get("/:influencerId", influencerController.getInfluencer);
 router.patch(
     "/update-profile",
     roleMiddleware(["influencer"]),
-    upload.fields([{ name: "profilePicture", maxCount: 1 }, { name: "coverImage", maxCount: 1 }, { name: "resume", maxCount: 1 }]),
+    upload.fields([
+        { name: "profilePicture", maxCount: 1 }, 
+        { name: "coverImage", maxCount: 1 }, 
+        { name: "resume", maxCount: 1 },
+        { name: "portfolioFiles", maxCount: 10 }
+    ]),
     validate(influencerValidation.updateProfileSchema),
     influencerController.updateInfluencerProfile
 );

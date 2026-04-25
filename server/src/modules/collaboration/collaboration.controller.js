@@ -107,11 +107,67 @@ const cancelCollaboration = AsyncHandler(async (req, res) => {
 });
 
 /**
- * Handle completing an active collaboration
+ * Handle pausing an active collaboration
+ */
+const pauseCollaboration = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const collaboration = await collaborationService.updateCollaborationStatus(id, req.user._id, "paused");
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Collaboration paused successfully")
+    );
+});
+
+/**
+ * Handle resuming a paused collaboration (Direct Brand Action)
+ */
+const resumeCollaboration = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const collaboration = await collaborationService.updateCollaborationStatus(id, req.user._id, "active");
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Collaboration resumed successfully")
+    );
+});
+
+/**
+ * Handle suspending a collaboration
+ */
+const suspendCollaboration = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const collaboration = await collaborationService.updateCollaborationStatus(id, req.user._id, "suspended");
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Collaboration suspended successfully")
+    );
+});
+
+/**
+ * Submit an action request (CANCEL, COMPLETE, RESUME)
+ */
+const submitActionRequest = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const collaboration = await collaborationService.submitActionRequest(id, req.user._id, req.body);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Action request submitted successfully")
+    );
+});
+
+/**
+ * Handle/Approve an action request
+ */
+const handleActionRequest = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const collaboration = await collaborationService.handleActionRequest(id, req.user._id, req.body);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Action request processed successfully")
+    );
+});
+
+/**
+ * Handle completing an active collaboration (with review)
  */
 const completeCollaboration = AsyncHandler(async (req, res) => {
     const { id } = req.params;
-    const collaboration = await collaborationService.updateCollaborationStatus(id, req.user._id, "completed");
+    const { reviewData } = req.body;
+    const collaboration = await collaborationService.completeCollaboration(id, req.user._id, reviewData);
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, collaboration, "Collaboration completed successfully")
     );
@@ -191,9 +247,14 @@ export const collaborationController = {
     cancelCollaborationRequest,
     getCollaborations,
     getCollaborationDetails,
-    getLatestCollaborationWithUser, // Added
+    getLatestCollaborationWithUser,
     cancelCollaboration,
     completeCollaboration,
+    pauseCollaboration,
+    resumeCollaboration,
+    suspendCollaboration,
+    submitActionRequest,
+    handleActionRequest,
     addDeliverable,
     updateDeliverable,
     submitDeliverable,

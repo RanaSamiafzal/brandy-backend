@@ -140,9 +140,7 @@ const getDashboardStats = async (userId, days = 30) => {
                     stats.impressions += collab.campaign.impressions || 100;
                 }
                 const total = collab.deliverables?.length || 0;
-                const approved = collab.deliverables?.filter(d => 
-                    ["APPROVED", "SUBMITTED", "DELIVERED"].includes(d.status)
-                ).length || 0;
+                const approved = collab.deliverables?.filter(d => d.status === "APPROVED").length || 0;
                 stats.tasksTotal += total;
                 stats.tasksCompleted += approved;
             }
@@ -163,8 +161,10 @@ const getDashboardStats = async (userId, days = 30) => {
         engagementRate: current.engagementCount > 0 ? parseFloat((current.engagementSum / current.engagementCount).toFixed(1)) : 0,
         collaborationCount: current.count,
         tasksCompleted: {
-            completed: current.tasksCompleted,
-            total: current.tasksTotal
+            completed: allCollaborations.reduce((acc, collab) => 
+                acc + (collab.deliverables?.filter(d => d.status === "APPROVED").length || 0), 0),
+            total: allCollaborations.reduce((acc, collab) => 
+                acc + (collab.deliverables?.length || 0), 0)
         },
         engagementOverview: {
             likes: current.likes,
@@ -270,52 +270,83 @@ const getProfile = async (userId) => {
         .sort({ createdAt: -1 })
         .lean();
 
-    // Fetch active collaborations
-    const activeCollaborations = await CollaborationRequest.find({
-        receiver: userId,
-        status: "accepted"
+    // Fetch active collaborations from the actual Collaboration model
+    const activeCollaborations = await Collaboration.find({
+        influencer: userId,
+        status: { $in: ["active", "in_progress", "review"] },
+        isDeleted: false
     })
-    .populate("sender", "fullname profilePic")
+    .populate("brand", "fullname profilePic")
     .populate("campaign", "name description budgetRange budget")
     .sort({ createdAt: -1 })
     .lean();
 
-    return { ...influencer, reviews, activeCollaborations, collaborationCount: activeCollaborations.length };
+    const totalCollabs = await Collaboration.countDocuments({ 
+        influencer: userId, 
+        isDeleted: false 
+    });
+
+    return { 
+        ...influencer, 
+        reviews, 
+        activeCollaborations, 
+        collaborationCount: totalCollabs 
+    };
 };
 
 /**
  * Update influencer profile
  */
 const updateProfile = async (userId, updateData) => {
-    // Handle socialMedia Map replacement separately to ensure keys can be deleted
-    // (findOneAndUpdate with $set often merges Map keys instead of replacing them)
+    let influencer = await Influencer.findOne({ user: userId });
+    
+    if (!influencer) {
+        console.log(`[InfluencerService] Profile missing for user ${userId}. Re-creating...`);
+        // Fetch user to get default fullname for username
+        const user = await User.findById(userId);
+        influencer = await Influencer.create({
+            user: userId,
+            username: user?.fullname?.toLowerCase().replace(/\s+/g, "") || `user${userId.toString().slice(-4)}`,
+            about: `Hi, I'm ${user?.fullname || 'an influencer'}`
+        });
+    }
+
+    // Handle socialMedia Map replacement
     if (updateData.socialMedia) {
-        console.log(`[InfluencerService] SYNCING socialMedia for user ${userId}. Data:`, JSON.stringify(updateData.socialMedia));
-        const influencer = await Influencer.findOne({ user: userId });
-        if (influencer) {
-            influencer.socialMedia.clear();
-            const entries = Object.entries(updateData.socialMedia);
-            if (entries.length > 0) {
-                entries.forEach(([platform, value]) => {
-                    influencer.socialMedia.set(platform, value || "");
-                });
+        if (typeof updateData.socialMedia === 'string') {
+            try {
+                updateData.socialMedia = JSON.parse(updateData.socialMedia);
+            } catch (e) {
+                updateData.socialMedia = {};
             }
-            await influencer.save({ validateBeforeSave: false });
-            console.log(`[InfluencerService] Map updated. New keys: ${Array.from(influencer.socialMedia.keys()).join(', ') || 'NONE'}`);
-        } else {
-            console.log(`[InfluencerService] Profile not found, skipping Map sync.`);
         }
+        
+        console.log(`[InfluencerService] Syncing socialMedia for user ${userId}`);
+        influencer.socialMedia.clear();
+        const validPlatforms = ["instagram", "tiktok", "twitter", "linkedin", "youtube", "facebook"];
+        Object.entries(updateData.socialMedia).forEach(([platform, value]) => {
+            if (validPlatforms.includes(platform.toLowerCase())) {
+                influencer.socialMedia.set(platform.toLowerCase(), value || "");
+            }
+        });
         delete updateData.socialMedia;
     }
 
-    const updatedInfluencer = await Influencer.findOneAndUpdate(
-        { user: userId },
-        { $set: updateData },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
-    if (!updatedInfluencer) {
-        throw new ApiError(validationStatus.notFound, "Influencer profile not found");
+    // Handle portfolio specifically to ensure it's replaced
+    if (updateData.portfolio !== undefined) {
+        console.log(`[InfluencerService] Updating portfolio: ${updateData.portfolio.length} items`);
+        influencer.portfolio = updateData.portfolio;
+        delete updateData.portfolio;
     }
+
+    // Update other fields
+    Object.keys(updateData).forEach(key => {
+        if (updateData[key] !== undefined) {
+            influencer[key] = updateData[key];
+        }
+    });
+
+    await influencer.save({ validateBeforeSave: false });
 
     // Sync user fullname for consistency
     if (updateData.username) {
@@ -454,6 +485,7 @@ const searchInfluencers = async ({
                 socialMedia: { $first: "$socialMedia" },
                 isVerified: { $first: "$userDetails.isVerified" },
                 verifiedPlatforms: { $first: "$userDetails.verifiedPlatforms" },
+                user: { $first: "$userDetails._id" },
             }
         },
         sort === "rating_desc" ? { $sort: { averageRating: -1 } } : { $sort: { createdAt: -1 } },
@@ -550,17 +582,31 @@ const getInfluencerById = async (influencerId) => {
         0
     );
 
-    // Fetch active collaborations
-    const activeCollaborations = await CollaborationRequest.find({
-        receiver: influencer.user._id,
-        status: "accepted"
+    // Fetch active collaborations from the actual Collaboration model
+    const activeCollaborations = await Collaboration.find({
+        influencer: influencer.user._id,
+        status: { $in: ["active", "in_progress", "review"] },
+        isDeleted: false
     })
-    .populate("sender", "fullname profilePic")
+    .populate("brand", "fullname profilePic")
     .populate("campaign", "name description budgetRange budget")
     .sort({ createdAt: -1 })
     .lean();
 
-    return { influencer: { ...influencer, reviews, activeCollaborations }, totalFollowers };
+    const totalCollabs = await Collaboration.countDocuments({ 
+        influencer: influencer.user._id, 
+        isDeleted: false 
+    });
+
+    return { 
+        influencer: { 
+            ...influencer, 
+            reviews, 
+            activeCollaborations, 
+            collaborationCount: totalCollabs 
+        }, 
+        totalFollowers 
+    };
 };
 
 

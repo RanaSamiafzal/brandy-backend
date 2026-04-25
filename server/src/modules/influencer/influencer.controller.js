@@ -53,17 +53,71 @@ const updateInfluencerProfile = AsyncHandler(async (req, res) => {
 
     if (req.files?.profilePicture?.[0]?.path) {
         const upload = await uploadOnCloudinary(req.files.profilePicture[0].path);
-        if (upload?.url) updateData.profilePicture = upload.url;
+        if (upload?.secure_url) updateData.profilePicture = upload.secure_url;
     }
 
     if (req.files?.coverImage?.[0]?.path) {
         const upload = await uploadOnCloudinary(req.files.coverImage[0].path);
-        if (upload?.url) updateData.coverImage = upload.url;
+        if (upload?.secure_url) updateData.coverImage = upload.secure_url;
     }
 
     if (req.files?.resume?.[0]?.path) {
         const upload = await uploadOnCloudinary(req.files.resume[0].path);
-        if (upload?.url) updateData.resume = upload.url;
+        if (upload?.secure_url) updateData.resume = upload.secure_url;
+    }
+
+    // Handle portfolio (links and files)
+    let portfolio = [];
+    let portfolioUpdated = false;
+
+    if (updateData.portfolio !== undefined) {
+        portfolioUpdated = true;
+        if (typeof updateData.portfolio === "string") {
+            try {
+                portfolio = JSON.parse(updateData.portfolio);
+                console.log(`[InfluencerController] Parsed portfolio from body: ${portfolio.length} items`);
+            } catch (e) {
+                console.error(`[InfluencerController] Failed to parse portfolio JSON:`, e.message);
+                portfolio = [];
+            }
+        } else if (Array.isArray(updateData.portfolio)) {
+            portfolio = updateData.portfolio;
+            console.log(`[InfluencerController] Portfolio received as array: ${portfolio.length} items`);
+        }
+    }
+
+    if (req.files?.portfolioFiles?.length > 0) {
+        portfolioUpdated = true;
+        console.log(`[InfluencerController] Processing ${req.files.portfolioFiles.length} new portfolio files...`);
+        for (const file of req.files.portfolioFiles) {
+            console.log(`[InfluencerController] Uploading to Cloudinary: ${file.originalname}`);
+            // Use resource_type 'raw' for non-image files (PDFs, docs) to prevent
+            // Cloudinary from returning a /image/upload/ URL that returns 401
+            const isImage = /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(file.originalname);
+            const upload = await uploadOnCloudinary(file.path, {
+                resource_type: isImage ? 'image' : 'raw',
+                use_filename: true,
+                unique_filename: true
+            });
+            if (upload?.secure_url) {
+                portfolio.push({
+                    type: "file",
+                    url: upload.secure_url,
+                    title: file.originalname || "Portfolio Document",
+                    fileSize: upload.bytes || 0,
+                    format: upload.format || file.originalname?.split('.').pop() || ''
+                });
+            }
+        }
+    }
+
+    if (portfolioUpdated) {
+        updateData.portfolio = portfolio;
+        console.log(`[InfluencerController] SAVING PORTFOLIO. Count: ${portfolio.length}`);
+        portfolio.forEach((p, i) => console.log(`  [${i}] ${p.type}: ${p.title} (${p.url})`));
+    } else {
+        console.log(`[InfluencerController] Portfolio NOT updated in this request.`);
+        delete updateData.portfolio;
     }
 
     if (typeof updateData.recentWork === "string") {
@@ -75,7 +129,16 @@ const updateInfluencerProfile = AsyncHandler(async (req, res) => {
     }
 
     // Handle socialMedia object (either from JSON or FormData)
-    let socialMedia = updateData.socialMedia || {};
+    let socialMedia = updateData.socialMedia;
+    if (typeof socialMedia === 'string') {
+        try {
+            socialMedia = JSON.parse(socialMedia);
+        } catch (e) {
+            socialMedia = {};
+        }
+    } else {
+        socialMedia = socialMedia || {};
+    }
     const socialPlatforms = ["instagram", "tiktok", "twitter", "linkedin", "youtube", "facebook"];
     let hasSocialInRoot = false;
 

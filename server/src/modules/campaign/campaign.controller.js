@@ -22,10 +22,25 @@ const createCampaign = AsyncHandler(async (req, res) => {
         brand: userId,
     };
 
+    // Standardize array fields from multipart/form-data
+    if (req.body['platform[]']) {
+        campaignData.platform = Array.isArray(req.body['platform[]']) ? req.body['platform[]'] : [req.body['platform[]']];
+        delete campaignData['platform[]'];
+    } else if (req.body.platform && !Array.isArray(req.body.platform)) {
+        campaignData.platform = [req.body.platform];
+    }
+
+    if (req.body['goals[]']) {
+        campaignData.goals = Array.isArray(req.body['goals[]']) ? req.body['goals[]'] : [req.body['goals[]']];
+        delete campaignData['goals[]'];
+    } else if (req.body.goals && !Array.isArray(req.body.goals)) {
+        campaignData.goals = [req.body.goals];
+    }
+
     // Handle image upload if provided
     if (req.files?.image?.[0]?.path) {
         const uploadedImage = await uploadOnCloudinary(req.files.image[0].path);
-        campaignData.image = uploadedImage?.url || "";
+        campaignData.image = uploadedImage?.secure_url || "";
     }
 
     const campaign = await campaignService.createCampaign(campaignData);
@@ -196,7 +211,7 @@ const applyToCampaign = AsyncHandler(async (req, res) => {
     let uploadedPortfolio = "";
     if (req.files?.portfolio?.[0]?.path) {
         const uploadedFile = await uploadOnCloudinary(req.files.portfolio[0].path);
-        uploadedPortfolio = uploadedFile?.url || "";
+        uploadedPortfolio = uploadedFile?.secure_url || "";
     }
 
     let request;
@@ -254,10 +269,25 @@ const updateCampaign = AsyncHandler(async (req, res) => {
     const { campaignId } = req.params;
     const updateData = { ...req.body };
 
+    // Standardize array fields from multipart/form-data
+    if (req.body['platform[]']) {
+        updateData.platform = Array.isArray(req.body['platform[]']) ? req.body['platform[]'] : [req.body['platform[]']];
+        delete updateData['platform[]'];
+    } else if (req.body.platform && !Array.isArray(req.body.platform)) {
+        updateData.platform = [req.body.platform];
+    }
+
+    if (req.body['goals[]']) {
+        updateData.goals = Array.isArray(req.body['goals[]']) ? req.body['goals[]'] : [req.body['goals[]']];
+        delete updateData['goals[]'];
+    } else if (req.body.goals && !Array.isArray(req.body.goals)) {
+        updateData.goals = [req.body.goals];
+    }
+
     // Handle image update
     if (req.files?.image?.[0]?.path) {
         const uploadedImage = await uploadOnCloudinary(req.files.image[0].path);
-        updateData.image = uploadedImage?.url || "";
+        updateData.image = uploadedImage?.secure_url || "";
     }
 
     const updatedCampaign = await campaignService.updateCampaign(campaignId, updateData);

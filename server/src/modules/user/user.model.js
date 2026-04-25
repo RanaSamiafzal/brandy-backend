@@ -152,7 +152,17 @@ UserSchema.virtual('isProfileVerified').get(function () {
     return count >= 3;
 });
 
-// Passwaord Hashing
+// Fix platforms field: ensure it is always a plain object, never an array.
+// This prevents a MongoDB error when old documents have platforms stored as []
+// and Mongoose tries to write platforms.youtube into it during save().
+UserSchema.pre("save", function (next) {
+    if (Array.isArray(this.platforms)) {
+        this.platforms = {};
+    }
+    next();
+});
+
+// Password Hashing
 UserSchema.pre("save", async function (next) {
     if (!this.isModified('password')) return next();
     this.password = await bcrypt.hash(this.password, 10);
@@ -166,15 +176,18 @@ UserSchema.methods.isPasswordCorrect = async function (password) {
 
 UserSchema.methods.generateAccessToken = function () {
     if (!process.env.ACCESS_TOKEN_SECRET) {
+        console.error("CRITICAL: ACCESS_TOKEN_SECRET is missing in process.env");
         throw new Error("ACCESS_TOKEN_SECRET is missing");
     }
+    const payload = {
+        _id: this._id,
+        email: this.email,
+        fullname: this.fullname || this.name || "User", // Fallback for legacy data
+        role: this.role || "influencer", // Default fallback for invalid roles
+    };
+
     return jwt.sign(
-        {
-            _id: this._id,
-            email: this.email,
-            fullname: this.fullname,
-            role: this.role,
-        },
+        payload,
         process.env.ACCESS_TOKEN_SECRET,
         {
             expiresIn: process.env.ACCESS_TOKEN_EXPIRY
@@ -184,6 +197,7 @@ UserSchema.methods.generateAccessToken = function () {
 
 UserSchema.methods.generateRefreshToken = function () {
     if (!process.env.REFRESH_TOKEN_SECRET) {
+        console.error("CRITICAL: REFRESH_TOKEN_SECRET is missing in process.env");
         throw new Error("REFRESH_TOKEN_SECRET is missing");
     }
     return jwt.sign(

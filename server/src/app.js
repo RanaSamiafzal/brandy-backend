@@ -12,6 +12,7 @@ import activityRouter from './modules/activity/activity.routes.js'
 import messageRouter from './modules/message/message.routes.js'
 import oauthRouter from './modules/oauth/oauth.routes.js'
 import platformRouter from './modules/platform/platform.routes.js'
+import aiMatchRouter from './modules/aiMatch/aiMatch.routes.js'
 import { errorMiddleware } from './middleware/errorMiddleware.js';
 
 
@@ -19,9 +20,14 @@ const app = express()
 
 // we use cors  for setting that which origin we will accept the req 
 app.use(cors({
-    origin: ["http://localhost:5173", "http://localhost:3000", process.env.CORS_ORIGIN],
+    origin: [
+        "http://localhost:5173", 
+        "http://localhost:3000", 
+        "http://127.0.0.1:5173", 
+        "http://127.0.0.1:3000",
+        process.env.CORS_ORIGIN
+    ].filter(Boolean),
     credentials: true
-
 }))
 
 // for accept jason here but set the limit of accepting json
@@ -52,6 +58,7 @@ app.use('/api/v1/activities', activityRouter)
 app.use('/api/v1/messages', messageRouter)
 app.use('/api/v1/oauth', oauthRouter)
 app.use('/api/v1/platforms', platformRouter)
+app.use('/api/v1/aiMatch', aiMatchRouter)
 
 app.get('/api/v1/ping', (req, res) => res.json({
     status: 'ok',

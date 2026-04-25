@@ -217,7 +217,7 @@ const getAllCampaigns = async ({
 
     const pipeline = [
       { $match: matchStage },
-      // Join Collaboration to see if there's an active one
+      // Join Collaboration to see if there's any ongoing/completed collaboration
       {
         $lookup: {
           from: "collaborations",
@@ -226,18 +226,20 @@ const getAllCampaigns = async ({
             {
               $match: {
                 $expr: { $eq: ["$campaign", "$$campaignId"] },
-                status: { $in: ["active", "in_progress", "review"] },
                 isDeleted: false
               }
             },
-            { $project: { _id: 1 } }
+            { $sort: { createdAt: -1 } },
+            { $limit: 1 },
+            { $project: { _id: 1, status: 1 } }
           ],
-          as: "ongoingCollab"
+          as: "latestCollab"
         }
       },
       {
         $addFields: {
-          ongoingCollaborationId: { $arrayElemAt: ["$ongoingCollab._id", 0] }
+          ongoingCollaborationId: { $arrayElemAt: ["$latestCollab._id", 0] },
+          collaborationStatus: { $arrayElemAt: ["$latestCollab.status", 0] }
         }
       },
       {
@@ -253,12 +255,23 @@ const getAllCampaigns = async ({
     const total = result[0]?.totalCount[0]?.count || 0;
 
     return {
-      campaigns: campaigns.map((c) => ({
-        ...c,
-        status: c.status === "draft" ? "draft" : calculateStatus(
-          c.campaignTimeline?.startDate, c.campaignTimeline?.endDate
-        ),
-      })),
+      campaigns: campaigns.map((c) => {
+        let finalStatus = c.status;
+        
+        // If there is a collaboration linked, use its exact status
+        if (c.collaborationStatus) {
+           finalStatus = c.collaborationStatus;
+        } 
+        // Otherwise, if it's pending/active, recalculate based on timeline
+        else if (["pending", "active"].includes(c.status)) {
+           finalStatus = calculateStatus(c.campaignTimeline?.startDate, c.campaignTimeline?.endDate);
+        }
+
+        return {
+          ...c,
+          status: finalStatus
+        };
+      }),
       total,
       page: Number(page),
       pages: Math.ceil(total / limit),
@@ -344,6 +357,7 @@ const getAllCampaigns = async ({
         "brandProfile.brandname": 1,
         "brandProfile.logo": 1,
         "brandProfile.industry": 1,
+        "brandProfile.socialMedia": 1,
         "brandProfile._id": 1,
         "brandUser.fullname": 1,
         "brandUser.profilePic": 1,
@@ -369,7 +383,9 @@ const getAllCampaigns = async ({
   return {
     campaigns: campaigns.map((c) => ({
       ...c,
-      status: calculateStatus(c.campaignTimeline?.startDate, c.campaignTimeline?.endDate),
+      status: (["pending", "active"].includes(c.status))
+        ? calculateStatus(c.campaignTimeline?.startDate, c.campaignTimeline?.endDate)
+        : c.status,
     })),
     total,
     page: Number(page),
@@ -390,7 +406,17 @@ const getCampaignById = async (campaignId) => {
     throw new ApiError(validationStatus.notFound, "Campaign not found");
   }
 
-  if (campaign.status !== 'draft') {
+  // Get collaboration status dynamically
+  const Collaboration = mongoose.models.Collaboration;
+  const latestCollab = await Collaboration.findOne({ campaign: campaignId, isDeleted: false })
+                                        .sort({ createdAt: -1 })
+                                        .select('_id status')
+                                        .lean();
+
+  if (latestCollab) {
+    campaign.ongoingCollaborationId = latestCollab._id;
+    campaign.status = latestCollab.status;
+  } else if (["pending", "active"].includes(campaign.status)) {
     const { startDate, endDate } = campaign.campaignTimeline || {};
     campaign.status = calculateStatus(startDate, endDate);
   }

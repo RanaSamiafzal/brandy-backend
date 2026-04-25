@@ -7,18 +7,19 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
-const uploadOnCloudinary = async (LocalFilePath) => {
+const uploadOnCloudinary = async (LocalFilePath, options = {}) => {
     try {
         if (!LocalFilePath) return null;
 
         // upload file on cloudinary 
         const response = await cloudinary.uploader.upload(LocalFilePath, {
-            resource_type: 'auto'
+            resource_type: 'auto',
+            ...options
         })
 
         // file has been successfully uploaded 
-        console.log('File has been uploaded successfully',
-            response.url
+        console.log('File has been uploaded successfully to Cloudinary:',
+            response.secure_url
          );
 
         // after saving the file into  cloudinary we get access to the file system and then unlink the file so 

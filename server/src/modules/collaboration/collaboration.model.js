@@ -108,9 +108,28 @@ const collaborationSchema = new Schema(
         },
         status: {
             type: String,
-            enum: ["active", "in_progress", "review", "completed", "cancelled"],
+            enum: ["active", "in_progress", "review", "completed", "cancelled", "paused"],
             default: "active",
             index: true,
+        },
+        review: {
+            type: Schema.Types.ObjectId,
+            ref: "Review",
+        },
+        actionRequest: {
+            type: {
+                type: String,
+                enum: ["CANCEL", "COMPLETE", "RESUME", "NONE"],
+                default: "NONE"
+            },
+            requestedBy: { type: Schema.Types.ObjectId, ref: "User" },
+            reason: { type: String, trim: true },
+            status: { 
+                type: String, 
+                enum: ["PENDING", "APPROVED", "REJECTED", "IDLE"], 
+                default: "IDLE" 
+            },
+            requestedAt: { type: Date }
         },
         cancellationReason: {
             type: String,
@@ -122,15 +141,20 @@ const collaborationSchema = new Schema(
             ref: "User",
             default: null,
         },
+        completedAt: {
+            type: Date,
+            default: null,
+        },
+        completedBy: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
         startDate: {
             type: Date,
             default: Date.now,
         },
         endDate: {
-            type: Date,
-            default: null,
-        },
-        completedAt: {
             type: Date,
             default: null,
         },

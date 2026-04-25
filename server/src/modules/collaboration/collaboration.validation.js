@@ -10,6 +10,9 @@ const sendRequestSchema = Joi.object({
 
 const requestQuerySchema = Joi.object({
     status: Joi.string().valid("pending", "accepted", "rejected", "cancelled"),
+    type: Joi.string().valid("sent", "received", "all"),
+    search: Joi.string().allow(''),
+    platform: Joi.string().allow(''),
     page: Joi.number().min(1).default(1),
     limit: Joi.number().min(1).max(100).default(10),
 });

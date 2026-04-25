@@ -1,7 +1,7 @@
 import Joi from 'joi';
 
 const updateProfileSchema = Joi.object({
-    about: Joi.string().trim().min(10).max(1000),
+    about: Joi.string().trim().min(5).max(1000).allow(''),
     username: Joi.string().trim().min(3).max(50),
     category: Joi.string().trim(),
     platforms: Joi.array().items(Joi.object({
@@ -16,7 +16,7 @@ const updateProfileSchema = Joi.object({
             description: Joi.string().allow(''),
         })),
     })),
-    portfolio: Joi.string().uri().allow(''),
+    portfolio: Joi.any(),
     resume: Joi.any().allow(''),
     recentWork: Joi.any(),
     location: Joi.string().trim().allow(''),

@@ -155,6 +155,38 @@ const verifyOTP = AsyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * Initialize Facebook login
+ */
+const facebookConnect = AsyncHandler(async (req, res) => {
+    const authUrl = authService.getFacebookAuthUrl();
+    return res.redirect(authUrl);
+});
+
+/**
+ * Handle Facebook callback and fetch Instagram info
+ */
+const facebookCallback = AsyncHandler(async (req, res) => {
+    const { code, error } = req.query;
+    if (error) {
+        return res.status(validationStatus.badRequest).json(
+            new ApiResponse(validationStatus.badRequest, null, `Facebook OAuth error: ${error}`)
+        );
+    }
+    if (!code) {
+        return res.status(validationStatus.badRequest).json(
+            new ApiResponse(validationStatus.badRequest, null, "Authorization code is required")
+        );
+    }
+
+    const instaData = await authService.handleFacebookCallback(code);
+
+    return res.status(validationStatus.ok).json({
+        success: true,
+        instagram: instaData
+    });
+});
+
 export const authController = {
     register,
     login,
@@ -165,4 +197,6 @@ export const authController = {
     changePassword,
     sendOTP,
     verifyOTP,
+    facebookConnect,
+    facebookCallback,
 };

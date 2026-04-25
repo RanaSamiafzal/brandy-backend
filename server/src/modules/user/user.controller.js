@@ -27,9 +27,27 @@ const getMe = AsyncHandler(async (req, res) => {
     let roleProfile = null;
     if (role === "influencer") {
         roleProfile = await Influencer.findOne({ user: userId }).lean();
+        if (!roleProfile) {
+            console.log(`[UserController] Influencer profile missing for user ${userId}. Auto-creating...`);
+            roleProfile = await Influencer.create({
+                user: userId,
+                username: user?.fullname?.toLowerCase().replace(/\s+/g, "") || `user${userId.toString().slice(-4)}`,
+                about: `Hi, I'm ${user?.fullname || 'an influencer'}`
+            });
+            roleProfile = roleProfile.toObject();
+        }
     }
     if (role === "brand") {
         roleProfile = await Brand.findOne({ user: userId }).lean();
+        if (!roleProfile) {
+            console.log(`[UserController] Brand profile missing for user ${userId}. Auto-creating...`);
+            roleProfile = await Brand.create({
+                user: userId,
+                brandname: user?.fullname || "My Brand",
+                budgetRange: { min: 0, max: 0 }
+            });
+            roleProfile = roleProfile.toObject();
+        }
     }
 
     const completion = await getCompletionStatus(userId, role);
