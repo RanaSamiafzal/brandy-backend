@@ -471,13 +471,60 @@ const searchInfluencers = async ({
                 }
             }
         }] : []),
+        // Dynamic stats calculation for legacy data support
+        {
+            $lookup: {
+                from: "reviews",
+                localField: "user",
+                foreignField: "reviewee",
+                as: "allReviews"
+            }
+        },
+        {
+            $lookup: {
+                from: "collaborations",
+                localField: "user",
+                foreignField: "influencer",
+                as: "allCollabs"
+            }
+        },
         {
             $group: {
                 _id: "$_id",
                 username: { $first: "$username" },
                 profilePicture: { $first: { $cond: [{ $ifNull: ["$profilePicture", false] }, "$profilePicture", "$userDetails.profilePic"] } },
                 category: { $first: "$category" },
-                averageRating: { $first: "$averageRating" },
+                averageRating: { 
+                  $first: { 
+                    $let: {
+                      vars: {
+                        revs: { $filter: { input: "$allReviews", as: "r", cond: { $eq: ["$$r.role", "brand"] } } }
+                      },
+                      in: {
+                        $cond: [
+                          { $gt: [{ $size: "$$revs" }, 0] },
+                          { $avg: "$$revs.rating" },
+                          "$averageRating"
+                        ]
+                      }
+                    }
+                  } 
+                },
+                reviewsCount: { 
+                  $first: { 
+                    $let: {
+                      vars: {
+                        revs: { $filter: { input: "$allReviews", as: "r", cond: { $eq: ["$$r.role", "brand"] } } }
+                      },
+                      in: { $max: [{ $size: "$$revs" }, { $ifNull: ["$reviewsCount", 0] }] }
+                    }
+                  } 
+                },
+                collaborationCount: { 
+                  $first: { 
+                    $max: [{ $size: "$allCollabs" }, { $ifNull: ["$collaborationCount", 0] }] 
+                  } 
+                },
                 location: { $first: "$location" },
                 platforms: { $push: "$platforms" },
                 minPrice: { $min: "$platforms.services.price" },
@@ -486,6 +533,7 @@ const searchInfluencers = async ({
                 isVerified: { $first: "$userDetails.isVerified" },
                 verifiedPlatforms: { $first: "$userDetails.verifiedPlatforms" },
                 user: { $first: "$userDetails._id" },
+                isAvailable: { $first: "$isAvailable" }
             }
         },
         sort === "rating_desc" ? { $sort: { averageRating: -1 } } : { $sort: { createdAt: -1 } },

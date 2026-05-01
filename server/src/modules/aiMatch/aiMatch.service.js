@@ -25,27 +25,94 @@ export const getFilteredInfluencers = async (campaign) => {
     // We check this in Layer 2 (Scoring) instead of hard-filtering in Layer 1 
     // unless the user has many influencers. Keeping Layer 1 broad for now.
 
-    let influencers = await Influencer.find(query).limit(50).populate("user", "fullname profilePic isVerified verifiedPlatforms").lean();
+    const pipeline = [
+      { $match: query },
+      { $limit: 50 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "userDetails"
+        }
+      },
+      { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "reviews",
+          localField: "user",
+          foreignField: "reviewee",
+          as: "allReviews"
+        }
+      },
+      {
+        $lookup: {
+          from: "collaborations",
+          localField: "user",
+          foreignField: "influencer",
+          as: "allCollabs"
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          user: "$userDetails",
+          username: 1,
+          category: 1,
+          about: 1,
+          coverImage: 1,
+          platforms: 1,
+          socialMedia: 1,
+          location: 1,
+          isAvailable: 1,
+          isVerified: "$userDetails.isVerified",
+          verifiedPlatforms: "$userDetails.verifiedPlatforms",
+          averageRating: {
+            $let: {
+              vars: {
+                revs: { $filter: { input: "$allReviews", as: "r", cond: { $eq: ["$$r.role", "brand"] } } }
+              },
+              in: {
+                $cond: [
+                  { $gt: [{ $size: "$$revs" }, 0] },
+                  { $avg: "$$revs.rating" },
+                  "$averageRating"
+                ]
+              }
+            }
+          },
+          reviewsCount: {
+            $let: {
+              vars: {
+                revs: { $filter: { input: "$allReviews", as: "r", cond: { $eq: ["$$r.role", "brand"] } } }
+              },
+              in: { $max: [{ $size: "$$revs" }, { $ifNull: ["$reviewsCount", 0] }] }
+            }
+          },
+          collaborationCount: {
+            $max: [{ $size: "$allCollabs" }, { $ifNull: ["$collaborationCount", 0] }]
+          }
+        }
+      }
+    ];
+
+    let influencers = await Influencer.aggregate(pipeline);
 
     // 3. Robust Fallback Strategy
     if (influencers.length === 0) {
       // Fallback 1: Just match category (ignore platform)
-      influencers = await Influencer.find({
-        category: { $regex: new RegExp(`^${escapedIndustry}$`, 'i') }
-      }).limit(50).populate("user", "fullname profilePic isVerified verifiedPlatforms").lean();
+      const fallbackQuery1 = { category: { $regex: new RegExp(`^${escapedIndustry}$`, 'i') } };
+      influencers = await Influencer.aggregate([{ $match: fallbackQuery1 }, ...pipeline.slice(1)]);
       
       // Fallback 2: Just match platform (ignore category)
       if (influencers.length === 0) {
-        influencers = await Influencer.find({
-          "platforms.name": { 
-            $in: escapedPlatforms.map(p => new RegExp(`^${p}$`, 'i')) 
-          }
-        }).limit(50).populate("user", "fullname profilePic isVerified verifiedPlatforms").lean();
+        const fallbackQuery2 = { "platforms.name": { $in: escapedPlatforms.map(p => new RegExp(`^${p}$`, 'i')) } };
+        influencers = await Influencer.aggregate([{ $match: fallbackQuery2 }, ...pipeline.slice(1)]);
       }
       
       // Fallback 3: Return latest influencers (last resort)
       if (influencers.length === 0) {
-        influencers = await Influencer.find({ isAvailable: true }).sort({ createdAt: -1 }).limit(10).lean();
+        influencers = await Influencer.aggregate([{ $match: { isAvailable: true } }, { $sort: { createdAt: -1 } }, ...pipeline.slice(1), { $limit: 10 }]);
       }
     }
 

@@ -116,6 +116,10 @@ const collaborationSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "Review",
         },
+        influencerReview: {
+            type: Schema.Types.ObjectId,
+            ref: "Review",
+        },
         actionRequest: {
             type: {
                 type: String,
@@ -124,10 +128,10 @@ const collaborationSchema = new Schema(
             },
             requestedBy: { type: Schema.Types.ObjectId, ref: "User" },
             reason: { type: String, trim: true },
-            status: { 
-                type: String, 
-                enum: ["PENDING", "APPROVED", "REJECTED", "IDLE"], 
-                default: "IDLE" 
+            status: {
+                type: String,
+                enum: ["PENDING", "APPROVED", "REJECTED", "IDLE"],
+                default: "IDLE"
             },
             requestedAt: { type: Date }
         },

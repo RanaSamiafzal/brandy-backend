@@ -79,9 +79,13 @@ export const formatAndRankInfluencers = (scoredInfluencers) => {
       matchLevel: getMatchLevel(item.score),
       reasons: item.reasons,
       platforms: inf.platforms || [],
+      socialMedia: inf.socialMedia || {},
       isVerified: checkIsVerified(inf),
       verifiedPlatforms: inf.user?.verifiedPlatforms || inf.verifiedPlatforms || {},
-      trustLevel: getTrustLevel(inf)
+      trustLevel: getTrustLevel(inf),
+      averageRating: (inf.reviewsCount || 0) > 0 ? (inf.averageRating || 0) : 0,
+      reviewsCount: inf.reviewsCount || 0,
+      location: inf.location || (inf.user && inf.user.location) || ""
     };
   });
 

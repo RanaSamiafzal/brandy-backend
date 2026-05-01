@@ -229,6 +229,18 @@ const deleteDeliverable = AsyncHandler(async (req, res) => {
 });
 
 /**
+ * Handle influencer submitting a review of the brand (post-completion)
+ */
+const submitInfluencerReview = AsyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reviewData } = req.body;
+    const collaboration = await collaborationService.submitInfluencerReview(id, req.user._id, reviewData);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Review submitted successfully")
+    );
+});
+
+/**
  * Handle fetching the latest active collaboration with a specific user
  */
 const getLatestCollaborationWithUser = AsyncHandler(async (req, res) => {
@@ -260,4 +272,5 @@ export const collaborationController = {
     submitDeliverable,
     reviewDeliverable,
     deleteDeliverable,
+    submitInfluencerReview,
 };

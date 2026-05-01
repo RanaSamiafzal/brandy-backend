@@ -7,6 +7,7 @@ import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import mongoose from "mongoose";
 import { influencerService } from "../influencer/influencer.service.js";
 import { activityService } from "../activity/activity.service.js";
+import Review from "../collaboration/review.model.js";
 
 /**
  * Get brand dashboard statistics
@@ -20,11 +21,11 @@ const getDashboardStats = async (userId) => {
     const now = new Date();
 
     const campaignStats = await Campaign.aggregate([
-        { 
-            $match: { 
-                brand: new mongoose.Types.ObjectId(userId), 
-                isDeleted: false 
-            } 
+        {
+            $match: {
+                brand: new mongoose.Types.ObjectId(userId),
+                isDeleted: false
+            }
         },
         {
             $project: {
@@ -174,7 +175,7 @@ const getAnalyticsDashboard = async (userId) => {
         stats.requestStats.total++;
         if (req.sender.toString() === userId.toString()) stats.requestStats.sent++;
         if (req.receiver.toString() === userId.toString()) stats.requestStats.received++;
-        
+
         if (req.status === 'accepted') {
             stats.requestStats.accepted++;
             stats.collaborationCount++;
@@ -218,13 +219,13 @@ const getAnalyticsDashboard = async (userId) => {
     });
 
     stats.avgEngagementRate = campaignsWithEngRate > 0 ? (totalEngRate / campaignsWithEngRate).toFixed(1) : 0;
-    
+
     // Calculate platform engagement averages
     Object.keys(stats.platformStats).forEach(p => {
         if (stats.platformStats[p].posts > 0) {
             stats.platformStats[p].engagement = (stats.platformStats[p].engagement / stats.platformStats[p].posts).toFixed(1);
             // Mock followers gained for polish
-            stats.platformStats[p].followers = Math.floor(stats.platformStats[p].reach * 0.05); 
+            stats.platformStats[p].followers = Math.floor(stats.platformStats[p].reach * 0.05);
         }
     });
 
@@ -316,7 +317,16 @@ const getProfile = async (userId) => {
     if (!profiles.length) {
         throw new ApiError(validationStatus.notFound, "Brand profile not found");
     }
-    return profiles[0];
+
+    const brandProfile = profiles[0];
+
+    // Fetch influencer reviews about this brand
+    const reviews = await Review.find({ reviewee: userId, role: "influencer" })
+        .populate("reviewer", "fullname profilePic")
+        .sort({ createdAt: -1 })
+        .lean();
+
+    return { ...brandProfile, reviews };
 };
 
 /**
@@ -387,13 +397,13 @@ const getPublicProfile = async (brandId) => {
     }
 
     const brand = await Brand.aggregate([
-        { 
-            $match: { 
+        {
+            $match: {
                 $or: [
                     { _id: new mongoose.Types.ObjectId(brandId) },
                     { user: new mongoose.Types.ObjectId(brandId) }
                 ]
-            } 
+            }
         },
         { $lookup: { from: "users", localField: "user", foreignField: "_id", as: "user" } },
         { $unwind: "$user" },
@@ -441,9 +451,16 @@ const getPublicProfile = async (brandId) => {
         .limit(10)
         .lean();
 
-    return { 
+    // Fetch influencer reviews about this brand
+    const reviews = await Review.find({ reviewee: brand[0].user._id, role: "influencer" })
+        .populate("reviewer", "fullname profilePic")
+        .sort({ createdAt: -1 })
+        .lean();
+
+    return {
         brand: brand[0],
         campaigns,
+        reviews,
         stats: {
             activeCampaignsCount,
             totalCampaignsCount,
@@ -499,6 +516,34 @@ const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) =>
             }]
             : []),
 
+        // Count active campaigns
+        {
+            $lookup: {
+                from: "campaigns",
+                let: { userId: "$user" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ["$brand", "$$userId"] },
+                                    { $eq: ["$isDeleted", false] },
+                                    { $eq: ["$status", "active"] },
+                                ]
+                            }
+                        }
+                    },
+                    { $count: "count" }
+                ],
+                as: "activeCampaignsDoc",
+            },
+        },
+        {
+            $addFields: {
+                activeCampaignsCount: { $ifNull: [{ $arrayElemAt: ["$activeCampaignsDoc.count", 0] }, 0] }
+            }
+        },
+
         {
             $project: {
                 user: 1,
@@ -514,6 +559,7 @@ const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) =>
                 reviewsCount: 1,
                 socialMedia: 1,
                 lookingFor: 1,
+                activeCampaignsCount: 1,
                 createdAt: 1,
                 fullname: "$userDoc.fullname",
                 profilePic: "$userDoc.profilePic",

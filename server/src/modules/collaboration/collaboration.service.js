@@ -47,9 +47,9 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
         campaign: campaignId,
         status: { $in: ["pending", "accepted"] }
     });
-    
+
     if (existingRequest) {
-        const message = existingRequest.status === "pending" 
+        const message = existingRequest.status === "pending"
             ? "A collaboration request is already pending for this campaign"
             : "A collaboration already exists for this campaign";
         throw new ApiError(validationStatus.badRequest, message);
@@ -68,7 +68,7 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
     // Emit activity for the receiver
     const receiverUser = await User.findById(request.receiver).select('role');
     const campaign = await Campaign.findById(request.campaign).select('name');
-    
+
     await emitActivity({
         user: request.receiver,
         role: receiverUser?.role || (initiatedBy === 'brand' ? 'influencer' : 'brand'),
@@ -87,11 +87,11 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
  */
 const getRequests = async (userId, { status, type, platform, page = 1, limit = 10, search }) => {
     const skip = (page - 1) * limit;
-    
+
     // Base match based on type
     let matchStage = {};
     const objectUserId = new mongoose.Types.ObjectId(userId.toString());
-    
+
     // Support both User ID and Role (Influencer/Brand) IDs for maximum visibility
     const influencer = await Influencer.findOne({ user: objectUserId }).select("_id");
     const brand = await Brand.findOne({ user: objectUserId }).select("_id");
@@ -122,16 +122,16 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
         { $sort: { createdAt: -1 } }, // Latest first
         {
             $group: {
-                _id: { 
-                    campaign: "$campaign", 
-                    sender: "$sender", 
-                    receiver: "$receiver" 
+                _id: {
+                    campaign: "$campaign",
+                    sender: "$sender",
+                    receiver: "$receiver"
                 },
                 latestRecord: { $first: "$$ROOT" },
-                isRejectedBefore: { 
-                    $max: { 
-                        $cond: [ { $in: ["$status", ["rejected", "cancelled"]] }, true, false ] 
-                    } 
+                isRejectedBefore: {
+                    $max: {
+                        $cond: [{ $in: ["$status", ["rejected", "cancelled"]] }, true, false]
+                    }
                 }
             }
         },
@@ -144,7 +144,7 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
         },
         // NEW: Filter status AFTER grouping to ensure we only see the "Latest" status
         ...(status && status !== "all" ? [{ $match: { status: status } }] : []),
-        
+
         // Re-apply sort by latest
         { $sort: { createdAt: -1 } },
         // Join with sender details
@@ -271,10 +271,10 @@ const getRequests = async (userId, { status, type, platform, page = 1, limit = 1
             }
         },
         { $unwind: { path: "$collaborationInfo", preserveNullAndEmptyArrays: true } },
-        { 
-            $addFields: { 
-                collaborationId: "$collaborationInfo._id" 
-            } 
+        {
+            $addFields: {
+                collaborationId: "$collaborationInfo._id"
+            }
         },
         // Sort and Page
         { $sort: { createdAt: -1 } },
@@ -349,12 +349,12 @@ const acceptRequest = async (requestId, userId) => {
     if (otherRequests.length > 0) {
         await CollaborationRequest.updateMany(
             { _id: { $in: otherRequests.map(r => r._id) } },
-            { 
-                $set: { 
-                    status: "rejected", 
+            {
+                $set: {
+                    status: "rejected",
                     rejectionReason: "Another influencer was selected for this campaign",
                     respondedAt: new Date()
-                } 
+                }
             }
         );
 
@@ -409,12 +409,20 @@ const acceptRequest = async (requestId, userId) => {
 
     // Create or link conversation
     await messageService.createConversation(
-        request.sender, 
-        request.receiver, 
-        request.campaign, 
+        request.sender,
+        request.receiver,
+        request.campaign,
         collaboration._id
     );
-    
+
+    // 6. Update influencer collaboration count
+    const influencerId = request.initiatedBy === "influencer" ? request.sender : request.receiver;
+    const Influencer = mongoose.model("Influencer");
+    await Influencer.findOneAndUpdate(
+        { user: influencerId },
+        { $inc: { collaborationCount: 1 } }
+    );
+
     // 5. Update campaign status to perfectly sync with the new collaboration's status ('active')
     if (campaign && campaign.status !== 'active') {
         campaign.status = 'active';
@@ -446,7 +454,7 @@ const updateRequestStatus = async (requestId, userId, status) => {
     const targetUserId = isSenderAction ? request.receiver : request.sender;
     const targetUser = await User.findById(targetUserId).select('role');
     const campaign = await Campaign.findById(request.campaign).select('name');
-    
+
     await emitActivity({
         user: targetUserId,
         role: targetUser?.role || 'user',
@@ -563,7 +571,7 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
             }
         },
         { $unwind: { path: "$campaignDetails", preserveNullAndEmptyArrays: true } },
-        // Join with Review
+        // Join with Review (Brand's review of Influencer)
         {
             $lookup: {
                 from: "reviews",
@@ -573,6 +581,16 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
             }
         },
         { $unwind: { path: "$reviewDetails", preserveNullAndEmptyArrays: true } },
+        // Join with Influencer Review (Influencer's review of Brand)
+        {
+            $lookup: {
+                from: "reviews",
+                localField: "influencerReview",
+                foreignField: "_id",
+                as: "influencerReviewDetails"
+            }
+        },
+        { $unwind: { path: "$influencerReviewDetails", preserveNullAndEmptyArrays: true } },
         // Project final structure
         {
             $project: {
@@ -599,8 +617,8 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
                     image: "$campaignDetails.image"
                 },
                 deliverablesSummary: {
-                    total: { 
-                        $size: { $ifNull: ["$deliverables", []] } 
+                    total: {
+                        $size: { $ifNull: ["$deliverables", []] }
                     },
                     completed: {
                         $size: {
@@ -628,7 +646,8 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
                 startDate: 1,
                 endDate: 1,
                 paymentStatus: 1,
-                review: "$reviewDetails"
+                review: "$reviewDetails",
+                influencerReview: "$influencerReviewDetails"
             }
         },
         {
@@ -666,11 +685,12 @@ const getCollaborationDetails = async (id, userId) => {
             { influencer: userId }
         ]
     })
-    .populate("brand", "fullname email profilePic")
-    .populate("influencer", "fullname username email profilePic")
-    .populate("campaign", "name description image platform endDate")
-    .populate({ path: "review", model: "Review" })
-    .lean();
+        .populate("brand", "fullname email profilePic")
+        .populate("influencer", "fullname username email profilePic")
+        .populate("campaign", "name description image platform endDate")
+        .populate({ path: "review", model: "Review" })
+        .populate({ path: "influencerReview", model: "Review" })
+        .lean();
 
     if (!collaboration) {
         throw new ApiError(validationStatus.notFound, "Collaboration not found");
@@ -679,7 +699,7 @@ const getCollaborationDetails = async (id, userId) => {
     // Fetch influencer profile for stats
     const Influencer = mongoose.model("Influencer");
     const influencerProfile = await Influencer.findOne({ user: collaboration.influencer._id }).select("followersCount platforms");
-    
+
     return collaboration;
 };
 
@@ -703,10 +723,10 @@ const submitActionRequest = async (id, userId, { type, reason }) => {
     // Completion request requires all deliverables to be APPROVED/DELIVERED
     if (type === "COMPLETE") {
         const total = collaboration.deliverables?.length || 0;
-        const approved = collaboration.deliverables?.filter(d => 
+        const approved = collaboration.deliverables?.filter(d =>
             ["APPROVED", "DELIVERED"].includes(d.status)
         ).length || 0;
-        
+
         if (total > 0 && approved < total) {
             throw new ApiError(validationStatus.badRequest, "Cannot request completion until all deliverables are approved");
         }
@@ -725,7 +745,7 @@ const submitActionRequest = async (id, userId, { type, reason }) => {
     // Notify the other party
     const targetUserId = isBrand ? collaboration.influencer : collaboration.brand;
     const targetRole = isBrand ? "influencer" : "brand";
-    
+
     await emitActivity({
         user: targetUserId,
         role: targetRole,
@@ -760,7 +780,7 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
     if (decision === "REJECTED") {
         collaboration.actionRequest.status = "REJECTED";
         await collaboration.save();
-        
+
         await emitActivity({
             user: requestedBy,
             role: userId === collaboration.brand._id.toString() ? "influencer" : "brand",
@@ -770,7 +790,7 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
             relatedId: collaboration._id,
             category: "collaboration"
         });
-        
+
         return collaboration;
     }
 
@@ -787,7 +807,7 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
         updateData.status = "completed";
         updateData.completedAt = new Date();
         updateData.completedBy = requestedBy;
-        
+
         // If review data was provided in the approval step (for brand)
         if (reviewData && reviewData.rating) {
             const review = await Review.create({
@@ -799,13 +819,14 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
                 role: "brand"
             });
             updateData.review = review._id;
-            
-            // Update influencer average rating
+
+            // Update influencer average rating and reviewsCount
             const influencerProfile = await Influencer.findOne({ user: requestedBy });
             if (influencerProfile) {
                 const allReviews = await Review.find({ reviewee: requestedBy, role: "brand" });
                 const avg = allReviews.reduce((acc, r) => acc + r.rating, 0) / allReviews.length;
                 influencerProfile.averageRating = parseFloat(avg.toFixed(1));
+                influencerProfile.reviewsCount = allReviews.length;
                 await influencerProfile.save();
             }
         }
@@ -852,10 +873,10 @@ const completeCollaboration = async (id, userId, reviewData) => {
 
     // Completion requires all deliverables to be APPROVED
     const total = collaboration.deliverables?.length || 0;
-    const approved = collaboration.deliverables?.filter(d => 
+    const approved = collaboration.deliverables?.filter(d =>
         ["APPROVED", "DELIVERED", "SUBMITTED"].includes(d.status) // Be slightly flexible or strict? strict is better
     ).length || 0;
-    
+
     // Check if there are deliverables at all. If yes, they must be approved.
     const allApproved = collaboration.deliverables.every(d => ["APPROVED", "DELIVERED"].includes(d.status));
 
@@ -893,14 +914,15 @@ const completeCollaboration = async (id, userId, reviewData) => {
             await campaign.save();
         }
     }
-    
-    // Update influencer average rating
+
+    // Update influencer average rating and reviewsCount
     if (reviewId) {
         const influencerProfile = await Influencer.findOne({ user: collaboration.influencer._id });
         if (influencerProfile) {
             const allReviews = await Review.find({ reviewee: collaboration.influencer._id, role: "brand" });
             const avg = allReviews.reduce((acc, r) => acc + r.rating, 0) / allReviews.length;
             influencerProfile.averageRating = parseFloat(avg.toFixed(1));
+            influencerProfile.reviewsCount = allReviews.length;
             await influencerProfile.save();
         }
     }
@@ -998,7 +1020,7 @@ const submitDeliverable = async (collaborationId, deliverableId, userId, submiss
     deliverable.submissionFiles = submissionData.submissionFiles || [];
     deliverable.status = "SUBMITTED";
     deliverable.submittedAt = new Date();
-    
+
     await collaboration.save();
 
     await emitActivity({
@@ -1043,8 +1065,8 @@ const reviewDeliverable = async (collaborationId, deliverableId, userId, { statu
         role: "influencer",
         type: status === "APPROVED" ? "deliverable_approved" : "deliverable_revision_requested",
         title: status === "APPROVED" ? "Deliverable Approved" : "Revision Requested",
-        description: status === "APPROVED" 
-            ? `Your deliverable for "${collaboration.title || 'your project'}" was approved!` 
+        description: status === "APPROVED"
+            ? `Your deliverable for "${collaboration.title || 'your project'}" was approved!`
             : `The brand requested a revision for a deliverable in "${collaboration.title || 'your project'}".`,
         relatedId: collaboration._id,
         category: "collaboration"
@@ -1081,18 +1103,18 @@ const getLatestCollaborationWithUser = async (userId, otherUserId) => {
         ],
         status: { $in: ["active", "in_progress", "review"] }
     })
-    .sort({ createdAt: -1 })
-    .populate("brand", "fullname email profilePic")
-    .populate("influencer", "fullname username email profilePic")
-    .populate("campaign", "name description image platform endDate")
-    .lean();
+        .sort({ createdAt: -1 })
+        .populate("brand", "fullname email profilePic")
+        .populate("influencer", "fullname username email profilePic")
+        .populate("campaign", "name description image platform endDate")
+        .lean();
 
     if (!collaboration) return null;
 
     // Fetch influencer profile for stats
     const Influencer = mongoose.model("Influencer");
     const influencerProfile = await Influencer.findOne({ user: collaboration.influencer._id }).select("followersCount platforms");
-    
+
     if (influencerProfile) {
         const mainPlatform = influencerProfile.platforms?.[0];
         collaboration.influencerStats = {
@@ -1102,6 +1124,79 @@ const getLatestCollaborationWithUser = async (userId, otherUserId) => {
     }
 
     return collaboration;
+};
+
+/**
+ * Submit an influencer's review of a brand (post-completion)
+ * Mirrors the brand review flow in completeCollaboration
+ */
+const submitInfluencerReview = async (collaborationId, userId, reviewData) => {
+    const collaboration = await Collaboration.findById(collaborationId).populate("brand influencer");
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    // Only the influencer can submit this review
+    const isInfluencer = collaboration.influencer._id.toString() === userId.toString();
+    if (!isInfluencer) {
+        throw new ApiError(validationStatus.forbidden, "Only influencers can review brands");
+    }
+
+    // Only on completed collaborations
+    if (collaboration.status !== "completed") {
+        throw new ApiError(validationStatus.badRequest, "Can only review after collaboration is completed");
+    }
+
+    // Prevent duplicate reviews
+    if (collaboration.influencerReview) {
+        throw new ApiError(validationStatus.badRequest, "You have already reviewed this brand");
+    }
+
+    if (!reviewData || !reviewData.rating) {
+        throw new ApiError(validationStatus.badRequest, "Rating is required");
+    }
+
+    // Create the review (mirrors brand review creation in completeCollaboration)
+    const review = await Review.create({
+        reviewer: userId,                       // the influencer
+        reviewee: collaboration.brand._id,      // the brand
+        collaboration: collaboration._id,
+        rating: reviewData.rating,
+        comment: reviewData.comment || "",
+        role: "influencer"                       // reviewer's role
+    });
+
+    // Link review to collaboration
+    collaboration.influencerReview = review._id;
+    await collaboration.save();
+
+    // Recalculate Brand rating & reviewsCount (mirrors influencer rating recalc)
+    const brandProfile = await Brand.findOne({ user: collaboration.brand._id });
+    if (brandProfile) {
+        const allBrandReviews = await Review.find({ reviewee: collaboration.brand._id, role: "influencer" });
+        const avg = allBrandReviews.reduce((acc, r) => acc + r.rating, 0) / allBrandReviews.length;
+        brandProfile.rating = parseFloat(avg.toFixed(1));
+        brandProfile.reviewsCount = allBrandReviews.length;
+        await brandProfile.save();
+    }
+
+    // Notify the brand
+    await emitActivity({
+        user: collaboration.brand._id,
+        role: "brand",
+        type: "influencer_review_received",
+        title: "New Review Received",
+        description: `An influencer has left a ${reviewData.rating}-star review on your collaboration.`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
+
+    // Return updated collaboration with populated review
+    return await Collaboration.findById(collaborationId)
+        .populate("brand", "fullname email profilePic")
+        .populate("influencer", "fullname username email profilePic")
+        .populate("campaign", "name description image platform endDate")
+        .populate({ path: "review", model: "Review" })
+        .populate({ path: "influencerReview", model: "Review" })
+        .lean();
 };
 
 export const collaborationService = {
@@ -1121,4 +1216,5 @@ export const collaborationService = {
     submitActionRequest,
     handleActionRequest,
     completeCollaboration,
+    submitInfluencerReview,
 };

@@ -57,5 +57,8 @@ router.route("/:id/deliverables/:deliverableId")
 router.post("/:id/deliverables/:deliverableId/submit", collaborationController.submitDeliverable);
 router.patch("/:id/deliverables/:deliverableId/review", collaborationController.reviewDeliverable);
 
+// Influencer reviews brand (post-completion)
+router.post("/:id/influencer-review", collaborationController.submitInfluencerReview);
+
 export default router;
 

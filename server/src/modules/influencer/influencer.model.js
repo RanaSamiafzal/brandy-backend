@@ -124,6 +124,10 @@ const InfluencerSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    collaborationCount: {
+      type: Number,
+      default: 0,
+    },
     socialMedia: {
       type: Map,
       of: String,
