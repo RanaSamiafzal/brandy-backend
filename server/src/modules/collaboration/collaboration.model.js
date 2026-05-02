@@ -86,6 +86,24 @@ const collaborationSchema = new Schema(
             ref: "Campaign",
             required: true,
         },
+        sender: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+        },
+        initiatedBy: {
+            type: String,
+            enum: ["brand", "influencer"],
+        },
+        note: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        deliveryDays: {
+            type: Number,
+            default: null,
+        },
         totalPaidAmount: {
             type: Number,
             default: 0,
@@ -99,8 +117,8 @@ const collaborationSchema = new Schema(
         },
         title: {
             type: String,
-            required: [true, "Collaboration title is required"],
             trim: true,
+            default: "",
         },
         description: {
             type: String,
@@ -109,7 +127,7 @@ const collaborationSchema = new Schema(
         },
         agreedBudget: {
             type: Number,
-            required: true,
+            default: 0,
             min: 0,
         },
         proposedBudget: {
@@ -141,6 +159,10 @@ const collaborationSchema = new Schema(
             index: true,
         },
         review: {
+            type: Schema.Types.ObjectId,
+            ref: "Review",
+        },
+        influencerReview: {
             type: Schema.Types.ObjectId,
             ref: "Review",
         },

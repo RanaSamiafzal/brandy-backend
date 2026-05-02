@@ -35,6 +35,10 @@ const reviewSchema = new Schema(
             enum: ["brand", "influencer"], // role of the reviewer
             required: true,
         },
+        isDeleted: {
+            type: Boolean,
+            default: false,
+        },
     },
     {
         timestamps: true,
@@ -42,6 +46,9 @@ const reviewSchema = new Schema(
 );
 
 reviewSchema.index({ reviewee: 1, createdAt: -1 });
+
+// Prevent duplicate reviews for the same collaboration from the same role
+reviewSchema.index({ collaboration: 1, role: 1 }, { unique: true });
 
 const Review = mongoose.model("Review", reviewSchema);
 export default Review;

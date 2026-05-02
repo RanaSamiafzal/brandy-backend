@@ -85,6 +85,15 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
         user.stripeCustomerId = customer.id;
     }
 
+    // Auto-fix: If agreedBudget is 0 but proposedBudget or campaign budget exists, use it
+    if (!collaboration.agreedBudget || collaboration.agreedBudget === 0) {
+        const fallbackBudget = collaboration.proposedBudget || collaboration.campaign?.budget?.min || 0;
+        if (fallbackBudget > 0) {
+            collaboration.agreedBudget = fallbackBudget;
+            await collaboration.save();
+        }
+    }
+
     // Budget validation for Stripe (minimum $0.50)
     const amountCents = Math.round(collaboration.agreedBudget * 100);
     if (amountCents < 50) {

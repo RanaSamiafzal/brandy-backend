@@ -377,10 +377,16 @@ const getProfile = async (userId) => {
     const brandProfile = profiles[0];
 
     // Fetch influencer reviews about this brand
-    const reviews = await Review.find({ reviewee: userId, role: "influencer" })
-        .populate("reviewer", "fullname profilePic")
-        .sort({ createdAt: -1 })
-        .lean();
+    const reviews = await Review.aggregate([
+        { $match: { reviewee: new mongoose.Types.ObjectId(userId), role: "influencer" } },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: "$collaboration", latestReview: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$latestReview" } },
+        { $lookup: { from: "users", localField: "reviewer", foreignField: "_id", as: "reviewer" } },
+        { $unwind: "$reviewer" },
+        { $project: { "reviewer.password": 0, "reviewer.refreshToken": 0 } },
+        { $sort: { createdAt: -1 } }
+    ]);
 
     return { ...brandProfile, reviews };
 };
@@ -508,10 +514,16 @@ const getPublicProfile = async (brandId) => {
         .lean();
 
     // Fetch influencer reviews about this brand
-    const reviews = await Review.find({ reviewee: brand[0].user._id, role: "influencer" })
-        .populate("reviewer", "fullname profilePic")
-        .sort({ createdAt: -1 })
-        .lean();
+    const reviews = await Review.aggregate([
+        { $match: { reviewee: new mongoose.Types.ObjectId(brand[0].user._id), role: "influencer" } },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: "$collaboration", latestReview: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$latestReview" } },
+        { $lookup: { from: "users", localField: "reviewer", foreignField: "_id", as: "reviewer" } },
+        { $unwind: "$reviewer" },
+        { $project: { "reviewer.password": 0, "reviewer.refreshToken": 0 } },
+        { $sort: { createdAt: -1 } }
+    ]);
 
     return {
         brand: brand[0],

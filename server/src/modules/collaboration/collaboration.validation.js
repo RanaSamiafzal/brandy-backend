@@ -5,7 +5,7 @@ const sendRequestSchema = Joi.object({
     campaignId: Joi.string().optional(),
     proposedBudget: Joi.number().min(0).allow(null),
     note: Joi.string().trim().max(1000).allow(''),
-    deliveryDays: Joi.string().required(),
+    deliveryDays: Joi.number().min(1).allow(null).optional(),
 });
 
 const requestQuerySchema = Joi.object({
