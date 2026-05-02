@@ -1,8 +1,9 @@
 import Influencer from "./influencer.model.js";
 import User from "../user/user.model.js";
-import CollaborationRequest from "../collaboration/collaboration-request.model.js";
+// No need to import CollaborationRequest separately as it's merged into Collaboration
 import Collaboration from "../collaboration/collaboration.model.js";
 import Review from "../collaboration/review.model.js";
+import Payment from "../payment/payment.model.js";
 import Activity from "../activity/activity.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
@@ -26,10 +27,11 @@ const getDashboardStats = async (userId, days = 30) => {
     const prevPeriodStart = new Date(now.getTime() - 2 * periodDays * 24 * 60 * 60 * 1000);
 
     // 2. Fetch Aggregated Request Stats (Including Sent and Received)
-    const statsResult = await CollaborationRequest.aggregate([
+    const statsResult = await Collaboration.aggregate([
         { 
             $match: { 
-                $or: [{ sender: objectUserId }, { receiver: objectUserId }] 
+                $or: [{ influencer: objectUserId }, { brand: objectUserId }],
+                status: "requested"
             } 
         },
         {
@@ -46,7 +48,7 @@ const getDashboardStats = async (userId, days = 30) => {
             $group: {
                 _id: null,
                 totalRequests: { $sum: 1 },
-                pendingRequests: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
+                pendingRequests: { $sum: { $cond: [{ $eq: ["$status", "requested"] }, 1, 0] } },
                 acceptedRequests: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } }
             }
         }
@@ -58,8 +60,8 @@ const getDashboardStats = async (userId, days = 30) => {
     const completionRate = totalCollaborations > 0 ? Math.round((completedCount / totalCollaborations) * 100) : 0;
 
     // 4. Performance: Average Response Time
-    const requestsWithResponse = await CollaborationRequest.find({
-        receiver: objectUserId,
+    const requestsWithResponse = await Collaboration.find({
+        brand: objectUserId,
         respondedAt: { $ne: null }
     }).select("createdAt respondedAt").lean();
 
@@ -76,28 +78,29 @@ const getDashboardStats = async (userId, days = 30) => {
     }
 
     // 5. ALL Requests (Sent + Received, Top 3) with brand details
-    const rawAllRequests = await CollaborationRequest.find({
-        $or: [{ sender: objectUserId }, { receiver: objectUserId }]
+    const rawAllRequests = await Collaboration.find({
+        $or: [{ influencer: objectUserId }, { brand: objectUserId }],
+        status: "requested"
     })
     .sort({ createdAt: -1 })
-    .populate("sender", "fullname profilePic")
-    .populate("receiver", "fullname profilePic")
+    .populate("influencer", "fullname profilePic")
+    .populate("brand", "fullname profilePic")
     .populate({
         path: "campaign",
         match: { isDeleted: false },
         select: "name industry"
     })
     .lean();
-
+    
     const allRequests = rawAllRequests
         .filter(req => req.campaign)
         .slice(0, 3)
         .map(req => {
-            const isSent = req.sender?._id?.toString() === userId.toString();
+            const isSent = req.influencer?._id?.toString() === userId.toString();
             return {
                 ...req,
                 type: isSent ? "sent" : "received",
-                brandDetails: isSent ? req.receiver : req.sender
+                brandDetails: isSent ? req.brand : req.influencer
             };
         });
 
@@ -112,7 +115,7 @@ const getDashboardStats = async (userId, days = 30) => {
 
     const calculateAnalyticsForRange = (collabs, start, end) => {
         let stats = {
-            reach: 0,
+            earnings: 0,
             engagementSum: 0,
             engagementCount: 0,
             tasksCompleted: 0,
@@ -128,8 +131,8 @@ const getDashboardStats = async (userId, days = 30) => {
             const date = new Date(collab.createdAt);
             if (date >= start && date < end) {
                 stats.count++;
+                stats.earnings += collab.agreedBudget || 0;
                 if (collab.campaign) {
-                    stats.reach += collab.campaign.reach || 0;
                     if (collab.campaign.engagementRate > 0) {
                         stats.engagementSum += collab.campaign.engagementRate;
                         stats.engagementCount++;
@@ -156,8 +159,23 @@ const getDashboardStats = async (userId, days = 30) => {
         return Math.round(((curr - prev) / prev) * 100);
     };
 
+    // Fetch total earnings from Payment model
+    const paymentStats = await Payment.aggregate([
+        { $match: { influencer: objectUserId, status: 'completed' } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+    const allTimeEarnings = paymentStats[0]?.total || 0;
+
     const finalAnalytics = {
-        totalReach: current.reach,
+        totalEarnings: current.earnings,
+        allTimeEarnings,
+        availablePayout: allTimeEarnings, // Since payments are immediately transferred to Connect
+        pendingClearance: allCollaborations.reduce((acc, collab) => {
+            if (!collab.escrowFunded) return acc;
+            const deliverableCount = collab.deliverables?.length || 1;
+            const unapprovedCount = collab.deliverables?.filter(d => d.status !== "APPROVED").length || 0;
+            return acc + ((collab.agreedBudget / deliverableCount) * unapprovedCount);
+        }, 0),
         engagementRate: current.engagementCount > 0 ? parseFloat((current.engagementSum / current.engagementCount).toFixed(1)) : 0,
         collaborationCount: current.count,
         tasksCompleted: {
@@ -173,7 +191,7 @@ const getDashboardStats = async (userId, days = 30) => {
             impressions: current.impressions
         },
         growth: {
-            reach: getGrowth(current.reach, previous.reach),
+            earnings: getGrowth(current.earnings, previous.earnings),
             engagement: getGrowth(
                 current.engagementCount > 0 ? current.engagementSum / current.engagementCount : 0, 
                 previous.engagementCount > 0 ? previous.engagementSum / previous.engagementCount : 0
@@ -185,11 +203,10 @@ const getDashboardStats = async (userId, days = 30) => {
         collaborationPerformance: []
     };
 
-    // Populate topBrands and performance from current period collabs
+    // Populate topBrands and performance from ALL collaborations for accurate total spending ranking
     const topBrandsMap = {};
-    const currentCollabs = allCollaborations.filter(c => new Date(c.createdAt) >= periodStart);
-
-    currentCollabs.forEach(collab => {
+    
+    allCollaborations.forEach(collab => {
         const brandId = collab.brand?._id?.toString();
         if (brandId) {
             if (!topBrandsMap[brandId]) {
@@ -198,28 +215,32 @@ const getDashboardStats = async (userId, days = 30) => {
                     name: collab.brand.fullname,
                     avatar: collab.brand.profilePic,
                     earnings: 0,
+                    totalSpending: 0,
                     rate: 0
                 };
             }
             const earnings = collab.agreedBudget || 0;
-            topBrandsMap[brandId].earnings += earnings;
+            topBrandsMap[brandId].totalSpending += earnings;
             if (collab.campaign?.engagementRate) {
                 topBrandsMap[brandId].rate = Math.max(topBrandsMap[brandId].rate, collab.campaign.engagementRate);
             }
         }
 
-        finalAnalytics.collaborationPerformance.push({
-            id: collab._id,
-            brand: collab.brand?.fullname || "Unknown",
-            reach: collab.campaign?.reach || 0,
-            engagement: collab.campaign?.engagementRate || 0,
-            earnings: collab.agreedBudget || 0,
-            deliverablesCount: collab.deliverables?.length || 0
-        });
+        // Only add to performance list if within period or if we want a full history (sticking to current logic for UI performance)
+        if (new Date(collab.createdAt) >= periodStart) {
+            finalAnalytics.collaborationPerformance.push({
+                id: collab._id,
+                brand: collab.brand?.fullname || "Unknown",
+                reach: collab.campaign?.reach || 0,
+                engagement: collab.campaign?.engagementRate || 0,
+                earnings: collab.agreedBudget || 0,
+                deliverablesCount: collab.deliverables?.length || 0
+            });
+        }
     });
 
     finalAnalytics.topBrands = Object.values(topBrandsMap)
-        .sort((a, b) => b.earnings - a.earnings)
+        .sort((a, b) => b.totalSpending - a.totalSpending)
         .slice(0, 5);
 
     const recentActivities = await Activity.find({ user: userId, isDeleted: false })

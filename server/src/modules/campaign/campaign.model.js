@@ -68,10 +68,15 @@ const CampaignSchema = new mongoose.Schema({
     ref: 'User', // Referencing the User model directly as requested (brand userId)
     required: true,
   },
+  selectedInfluencer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
   status: {
     type: String,
-    enum: ['pending', 'active', 'in_progress', 'review', 'completed', 'paused', 'draft', 'cancelled'],
-    default: 'pending',
+    enum: ['open', 'pending', 'active', 'in_progress', 'review', 'completed', 'paused', 'draft', 'cancelled'],
+    default: 'open',
   },
   cancelReason: {
     type: String,

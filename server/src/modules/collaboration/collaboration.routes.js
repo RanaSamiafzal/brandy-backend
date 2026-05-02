@@ -15,6 +15,7 @@ router.route("/request")
 router.post("/request/:requestId/accept", collaborationController.acceptCollaborationRequest);
 router.post("/request/:requestId/reject", collaborationController.rejectCollaborationRequest);
 router.post("/request/:requestId/cancel", collaborationController.cancelCollaborationRequest);
+router.post("/request/:requestId/counter-offer", validate(collaborationValidation.counterOfferSchema), collaborationController.counterOffer);
 
 router.route("/")
     .get(collaborationController.getCollaborations);

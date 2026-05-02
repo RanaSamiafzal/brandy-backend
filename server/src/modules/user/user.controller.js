@@ -22,7 +22,9 @@ const getMe = AsyncHandler(async (req, res) => {
 
     // Force status to "active" when logging in or reloading the page
     await User.findByIdAndUpdate(userId, { status: "active", manualOffline: false });
+    console.log(`[GetMe] Fetching for UserID: ${userId}`);
     const user = await userService.getUserById(userId);
+    console.log(`[GetMe] Found User: ${user.email}, Onboarding: ${user.stripeOnboardingComplete}`);
 
     let roleProfile = null;
     if (role === "influencer") {

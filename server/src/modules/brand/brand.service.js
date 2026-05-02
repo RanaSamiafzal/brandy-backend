@@ -1,6 +1,7 @@
 import Brand from "./brand.model.js";
 import Campaign from "../campaign/campaign.model.js";
-import CollaborationRequest from "../collaboration/collaboration-request.model.js";
+import Collaboration from "../collaboration/collaboration.model.js";
+import Payment from "../payment/payment.model.js";
 import Activity from "../activity/activity.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
@@ -62,16 +63,21 @@ const getDashboardStats = async (userId) => {
         },
     ]);
 
-    const collaborationStats = await CollaborationRequest.aggregate([
-        { $match: { $or: [{ sender: new mongoose.Types.ObjectId(userId) }, { receiver: new mongoose.Types.ObjectId(userId) }] } },
+    const collaborationStats = await Collaboration.aggregate([
+        {
+            $match: {
+                $or: [{ influencer: new mongoose.Types.ObjectId(userId) }, { brand: new mongoose.Types.ObjectId(userId) }],
+                status: "requested"
+            }
+        },
         {
             $group: {
                 _id: null,
                 totalRequests: { $sum: 1 },
                 acceptedRequests: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
-                pendingRequests: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
-                senders: { $addToSet: "$sender" },
-                receivers: { $addToSet: "$receiver" },
+                pendingRequests: { $sum: { $cond: [{ $eq: ["$status", "requested"] }, 1, 0] } },
+                influencers: { $addToSet: "$influencer" },
+                brands: { $addToSet: "$brand" },
             },
         },
         {
@@ -82,7 +88,7 @@ const getDashboardStats = async (userId) => {
                 totalInfluencersContacted: {
                     $size: {
                         $setDifference: [
-                            { $setUnion: ["$senders", "$receivers"] },
+                            { $setUnion: ["$influencers", "$brands"] },
                             [new mongoose.Types.ObjectId(userId)]
                         ]
                     }
@@ -127,7 +133,14 @@ const getAnalyticsDashboard = async (userId) => {
     // Fetch all non-deleted campaigns for this brand
     const campaigns = await Campaign.find({ brand: userId, isDeleted: false }).lean();
 
-    // If no campaigns have analytics, or they are all 0, seed some sample data as per user "sure"
+    // Fetch total spending from Payment model
+    const paymentStats = await Payment.aggregate([
+        { $match: { brand: new mongoose.Types.ObjectId(userId), status: 'completed' } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+    const totalSpending = paymentStats[0]?.total || 0;
+
+    // If no campaigns have analytics, or they are all 0, seed some sample data
     const hasAnalytics = campaigns.some(c => c.reach > 0);
     if (!hasAnalytics && campaigns.length > 0) {
         await seedSampleAnalytics(userId);
@@ -137,7 +150,7 @@ const getAnalyticsDashboard = async (userId) => {
 
     // Aggregations
     const stats = {
-        totalReach: 0,
+        totalSpending,
         avgEngagementRate: 0,
         activeCampaigns: 0,
         engagementOverview: {
@@ -164,23 +177,45 @@ const getAnalyticsDashboard = async (userId) => {
     };
 
     // Fetch collaboration/request data
-    const requests = await CollaborationRequest.find({
-        $or: [
-            { sender: userId },
-            { receiver: userId }
-        ]
-    }).lean();
+    const collaborations = await Collaboration.find({
+        brand: userId,
+        isDeleted: false
+    }).populate("influencer", "fullname profilePic").lean();
 
-    requests.forEach(req => {
+    const influencerPerformanceMap = {};
+
+    collaborations.forEach(collab => {
+        // Track overall request stats (from HEAD logic)
         stats.requestStats.total++;
-        if (req.sender.toString() === userId.toString()) stats.requestStats.sent++;
-        if (req.receiver.toString() === userId.toString()) stats.requestStats.received++;
+        stats.requestStats.received++; // Defaulting to received for the brand as per local changes
 
-        if (req.status === 'accepted') {
+        if (collab.status === 'requested') {
+            stats.requestStats.pending++;
+        } else if (collab.status === 'accepted') {
             stats.requestStats.accepted++;
             stats.collaborationCount++;
-        } else if (req.status === 'pending') {
-            stats.requestStats.pending++;
+        } else if (collab.status === 'active' || collab.status === 'completed') {
+            stats.collaborationCount++;
+        }
+
+        // Track influencer performance
+        const influencerId = collab.influencer?._id?.toString();
+        if (influencerId) {
+            if (!influencerPerformanceMap[influencerId]) {
+                influencerPerformanceMap[influencerId] = {
+                    id: influencerId,
+                    name: collab.influencer.fullname,
+                    avatar: collab.influencer.profilePic,
+                    collabCount: 0,
+                    totalEarnings: 0,
+                    reach: 0,
+                    engagementSum: 0,
+                    engagementCount: 0
+                };
+            }
+            influencerPerformanceMap[influencerId].collabCount++;
+            influencerPerformanceMap[influencerId].totalEarnings += collab.agreedBudget || 0;
+            // Since we don't have per-collab reach yet easily accessible here, we'll use campaign reach if available
         }
     });
 
@@ -188,7 +223,6 @@ const getAnalyticsDashboard = async (userId) => {
     let campaignsWithEngRate = 0;
 
     campaigns.forEach(c => {
-        stats.totalReach += c.reach || 0;
         if (c.engagementRate > 0) {
             totalEngRate += c.engagementRate;
             campaignsWithEngRate++;
@@ -200,11 +234,11 @@ const getAnalyticsDashboard = async (userId) => {
         stats.engagementOverview.shares += c.shares || 0;
         stats.engagementOverview.impressions += c.impressions || 0;
 
-        // Platform specific logic (simplification: mapping first platform if multiple)
+        // Platform specific logic
         const primaryPlatform = Array.isArray(c.platform) ? c.platform[0] : c.platform;
         if (primaryPlatform && stats.platformStats[primaryPlatform]) {
             stats.platformStats[primaryPlatform].reach += c.reach || 0;
-            stats.platformStats[primaryPlatform].posts += 1; // Assuming 1 post per campaign for now
+            stats.platformStats[primaryPlatform].posts += 1;
             stats.platformStats[primaryPlatform].engagement += c.engagementRate || 0;
         }
 
@@ -229,12 +263,34 @@ const getAnalyticsDashboard = async (userId) => {
         }
     });
 
-    // Mock Top Performers for visual completeness as per design
-    stats.topPerformers = [
-        { id: "sarah_chen_mock", name: "Sarah Chen", reach: "450K", engagement: "6.2%", avatar: "https://i.pravatar.cc/150?u=sarah" },
-        { id: "mike_johnson_mock", name: "Mike Johnson", reach: "380K", engagement: "7.5%", avatar: "https://i.pravatar.cc/150?u=mike" },
-        { id: "emma_davis_mock", name: "Emma Davis", reach: "320K", engagement: "5.8%", avatar: "https://i.pravatar.cc/150?u=emma" }
-    ];
+    // Real Top Performers ranking logic
+    // We'll need to get the actual Influencer profiles for ratings
+    const influencerIds = Object.keys(influencerPerformanceMap);
+    const influencerProfiles = await mongoose.model("Influencer").find({ user: { $in: influencerIds } }).select("user averageRating reviewCount").lean();
+
+    influencerProfiles.forEach(profile => {
+        const id = profile.user.toString();
+        if (influencerPerformanceMap[id]) {
+            influencerPerformanceMap[id].rating = profile.averageRating || 0;
+            influencerPerformanceMap[id].reviewCount = profile.reviewCount || 0;
+
+            // Weighted score: 40% rating, 30% earnings, 20% collab count, 10% review count
+            // Normalize earnings (log base)
+            const earningsScore = Math.log10(influencerPerformanceMap[id].totalEarnings + 1) * 2;
+            influencerPerformanceMap[id].score = (influencerPerformanceMap[id].rating * 4) + (earningsScore * 3) + (influencerPerformanceMap[id].collabCount * 2);
+        }
+    });
+
+    stats.topPerformers = Object.values(influencerPerformanceMap)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(p => ({
+            id: p.id,
+            name: p.name,
+            avatar: p.avatar,
+            reach: p.totalEarnings > 1000 ? `${(p.totalEarnings / 1000).toFixed(1)}K` : `$${p.totalEarnings}`, // Using earnings as a primary metric display
+            engagement: p.rating ? `${p.rating} Stars` : "No rating"
+        }));
 
     return stats;
 };
@@ -435,10 +491,10 @@ const getPublicProfile = async (brandId) => {
         isDeleted: false
     });
 
-    const collaborationsCount = await CollaborationRequest.countDocuments({
+    const collaborationsCount = await Collaboration.countDocuments({
         $or: [
-            { sender: brand[0].user._id, status: "accepted" },
-            { receiver: brand[0].user._id, status: "accepted" }
+            { brand: brand[0].user._id, status: "accepted" },
+            { influencer: brand[0].user._id, status: "accepted" }
         ]
     });
 

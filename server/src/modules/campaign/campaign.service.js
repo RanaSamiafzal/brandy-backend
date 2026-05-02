@@ -1,4 +1,5 @@
 import Campaign from "./campaign.model.js";
+import Collaboration from "../collaboration/collaboration.model.js";
 import mongoose from "mongoose";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
@@ -321,10 +322,10 @@ const getAllCampaigns = async ({
     },
     { $unwind: { path: "$brandProfile", preserveNullAndEmptyArrays: true } },
 
-    // Join CollaborationRequest to get dynamic applicant count
+    // Join Collaboration to get dynamic applicant count
     {
       $lookup: {
-        from: "collaborationrequests",
+        from: "collaborations",
         localField: "_id",
         foreignField: "campaign",
         as: "applicants",
@@ -407,7 +408,6 @@ const getCampaignById = async (campaignId) => {
   }
 
   // Get collaboration status dynamically
-  const Collaboration = mongoose.models.Collaboration;
   const latestCollab = await Collaboration.findOne({ campaign: campaignId, isDeleted: false })
                                         .sort({ createdAt: -1 })
                                         .select('_id status')
@@ -422,9 +422,9 @@ const getCampaignById = async (campaignId) => {
   }
 
   // Dynamic applicant count for single view
-  const CollaborationRequest = mongoose.model("CollaborationRequest");
-  campaign.applicantsCount = await CollaborationRequest.countDocuments({
+  campaign.applicantsCount = await Collaboration.countDocuments({
     campaign: campaignId,
+    status: "requested"
   });
 
   return campaign;
@@ -475,8 +475,7 @@ const deleteCampaign = async (campaignId) => {
   }
 
   // Check if there are any accepted requests for this campaign
-  const CollaborationRequest = mongoose.model("CollaborationRequest");
-  const acceptedCount = await CollaborationRequest.countDocuments({ 
+  const acceptedCount = await Collaboration.countDocuments({ 
     campaign: campaignId, 
     status: "accepted" 
   });
@@ -491,19 +490,11 @@ const deleteCampaign = async (campaignId) => {
   campaign.isDeleted = true;
   await campaign.save();
 
-  // Delete all collaboration requests associated with this campaign
-  if (CollaborationRequest) {
-    await CollaborationRequest.deleteMany({ campaign: campaignId });
-  }
-
-  // Soft delete any collabs 
-  const Collaboration = mongoose.models.Collaboration;
-  if (Collaboration) {
-    await Collaboration.updateMany(
-      { campaign: campaignId },
-      { isDeleted: true, deletedAt: new Date(), status: 'cancelled' }
-    );
-  }
+  // Soft delete any collaborations associated with this campaign
+  await Collaboration.updateMany(
+    { campaign: campaignId },
+    { isDeleted: true, deletedAt: new Date(), status: 'cancelled' }
+  );
 
   return campaign;
 };
@@ -527,7 +518,6 @@ const cancelCampaign = async (campaignId, brandId, cancelReason = "") => {
   await campaign.save();
 
   // 1. Cancel all accepted collaborations
-  const Collaboration = mongoose.models.Collaboration;
   if (Collaboration) {
     await Collaboration.updateMany(
       { campaign: campaignId },
@@ -536,18 +526,15 @@ const cancelCampaign = async (campaignId, brandId, cancelReason = "") => {
   }
 
   // 2. Reject all pending requests
-  const CollaborationRequest = mongoose.model("CollaborationRequest");
-  if (CollaborationRequest) {
-    await CollaborationRequest.updateMany(
-      { campaign: campaignId, status: "pending" },
-      { status: "rejected", respondedAt: new Date() }
-    );
-  }
+  await Collaboration.updateMany(
+    { campaign: campaignId, status: "requested" },
+    { status: "rejected", respondedAt: new Date() }
+  );
 
   // 3. Notify all influencers involved (accepted or pending)
-  const influencersToNotify = await CollaborationRequest.find({ 
+  const influencersToNotify = await Collaboration.find({ 
     campaign: campaignId 
-  }).distinct("sender");
+  }).distinct("influencer");
 
   for (const influencerId of influencersToNotify) {
     await emitActivity({
@@ -578,8 +565,7 @@ const applyToCampaign = async (campaignId, influencerId, data) => {
   }
 
   // NEW: Check if an influencer was already accepted for this campaign
-  const CollaborationRequest = mongoose.model("CollaborationRequest");
-  const acceptedRequest = await CollaborationRequest.findOne({
+  const acceptedRequest = await Collaboration.findOne({
     campaign: campaignId,
     status: "accepted"
   });
@@ -588,24 +574,26 @@ const applyToCampaign = async (campaignId, influencerId, data) => {
     throw new ApiError(validationStatus.badRequest, "This campaign has already selected an influencer and is no longer accepting applications");
   }
 
-  const existing = await CollaborationRequest.findOne({
-    sender: influencerId,
+  const existing = await Collaboration.findOne({
+    influencer: influencerId,
     campaign: campaignId,
-    status: "pending",
+    status: "requested",
   });
   if (existing) {
     throw new ApiError(validationStatus.badRequest, "You have already applied to this campaign");
   }
 
-  const request = await CollaborationRequest.create({
-    initiatedBy: "influencer",
+  const request = await Collaboration.create({
+    brand: campaign.brand,
+    influencer: influencerId,
     sender: influencerId,
-    receiver: campaign.brand,
+    initiatedBy: "influencer",
     campaign: campaignId,
-    proposedBudget: data.proposedBudget || campaign.budget.min,
-    note: data.note || "",
-    deliveryDays: data.deliveryDays,
-    status: "pending",
+    title: campaign.name || "New Collaboration",
+    description: data.note || campaign.description || "",
+    agreedBudget: data.proposedBudget || campaign.budget?.min || 0,
+    notes: data.note || "",
+    status: "requested",
   });
 
   await emitActivity({

@@ -23,8 +23,16 @@ const deliverableSchema = new Schema(
         },
         status: {
             type: String,
-            enum: ["PENDING", "IN_PROGRESS", "SUBMITTED", "APPROVED", "REVISION_REQUESTED", "DELIVERED"],
+            enum: ["PENDING", "IN_PROGRESS", "SUBMITTED", "APPROVED"],
             default: "PENDING",
+        },
+        paymentStatus: {
+            type: String,
+            enum: ["unpaid", "paid", "paymentPending"],
+            default: "unpaid",
+        },
+        stripeTransferId: {
+            type: String,
         },
         submissionFiles: {
             type: [String],
@@ -35,6 +43,10 @@ const deliverableSchema = new Schema(
             trim: true,
             default: "",
         },
+        inProgressAt: {
+            type: Date,
+            default: null,
+        },
         submittedAt: {
             type: Date,
             default: null,
@@ -43,6 +55,14 @@ const deliverableSchema = new Schema(
             type: Date,
             default: null,
         },
+        allocatedBudget: {
+            type: Number,
+            default: 0,
+        },
+        isFinal: {
+            type: Boolean,
+            default: false,
+        }
     },
     { _id: true }
 );
@@ -66,12 +86,16 @@ const collaborationSchema = new Schema(
             ref: "Campaign",
             required: true,
         },
-        request: {
-            type: Schema.Types.ObjectId,
-            ref: "CollaborationRequest",
-            required: true,
-            index: true,
-            unique: true,
+        totalPaidAmount: {
+            type: Number,
+            default: 0,
+        },
+        escrowFunded: {
+            type: Boolean,
+            default: false,
+        },
+        stripePaymentIntentId: {
+            type: String,
         },
         title: {
             type: String,
@@ -86,6 +110,10 @@ const collaborationSchema = new Schema(
         agreedBudget: {
             type: Number,
             required: true,
+            min: 0,
+        },
+        proposedBudget: {
+            type: Number,
             min: 0,
         },
         currency: {
@@ -108,15 +136,11 @@ const collaborationSchema = new Schema(
         },
         status: {
             type: String,
-            enum: ["active", "in_progress", "review", "completed", "cancelled", "paused"],
-            default: "active",
+            enum: ["requested", "rejected", "awaiting_onboarding", "awaiting_funds", "active", "completed", "cancelled"],
+            default: "requested",
             index: true,
         },
         review: {
-            type: Schema.Types.ObjectId,
-            ref: "Review",
-        },
-        influencerReview: {
             type: Schema.Types.ObjectId,
             ref: "Review",
         },

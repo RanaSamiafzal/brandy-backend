@@ -88,6 +88,16 @@ const UserSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        stripeCustomerId: {
+            type: String,
+        },
+        stripeAccountId: {
+            type: String,
+        },
+        stripeOnboardingComplete: {
+            type: Boolean,
+            default: false,
+        },
         // OAuth verified platforms — stores detailed platform info
         verifiedPlatforms: [
             {
@@ -159,6 +169,12 @@ UserSchema.pre("save", function (next) {
     if (Array.isArray(this.platforms)) {
         this.platforms = {};
     }
+    
+    // Clean up invalid verifiedPlatforms to avoid validation errors
+    if (this.verifiedPlatforms && this.verifiedPlatforms.length > 0) {
+        this.verifiedPlatforms = this.verifiedPlatforms.filter(vp => vp && vp.platform);
+    }
+    
     next();
 });
 

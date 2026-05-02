@@ -6,7 +6,7 @@ import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { emitActivity } from "../../utils/activityUtils.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
 import Campaign from "./campaign.model.js";
-import CollaborationRequest from "../collaboration/collaboration-request.model.js";
+import Collaboration from "../collaboration/collaboration.model.js";
 
 /**
  * Handle campaign creation
@@ -198,10 +198,10 @@ const applyToCampaign = AsyncHandler(async (req, res) => {
     }
 
     // Prevent duplicate applications
-    const existing = await CollaborationRequest.findOne({
-        sender: influencerId,
+    const existing = await Collaboration.findOne({
+        influencer: influencerId,
         campaign: campaignId,
-        status: { $in: ["pending", "accepted"] },
+        status: { $in: ["requested", "accepted"] },
     });
     if (existing) {
         throw new ApiError(validationStatus.conflict, "You have already applied to this campaign");
@@ -216,15 +216,18 @@ const applyToCampaign = AsyncHandler(async (req, res) => {
 
     let request;
     try {
-        request = await CollaborationRequest.create({
-            initiatedBy: "influencer",
+        request = await Collaboration.create({
+            brand: campaign.brand,   // brand's user ID
+            influencer: influencerId,
             sender: influencerId,
-            receiver: campaign.brand,   // brand's user ID
+            initiatedBy: "influencer",
             campaign: campaignId,
-            proposedBudget: proposedBudget || "",
-            note: note || "",
+            title: campaign.name || "New Collaboration",
+            description: campaign.description || "",
+            agreedBudget: proposedBudget || campaign.budget?.min || 0,
             attachments: uploadedPortfolio ? [uploadedPortfolio] : [],
-            status: "pending",
+            status: "requested",
+            notes: note || "",
             deliverables: [],           // Explicitly empty array to avoid sub-validation issues
         });
     } catch (err) {

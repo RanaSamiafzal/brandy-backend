@@ -33,7 +33,7 @@ const sendCollaborationRequest = AsyncHandler(async (req, res) => {
  * Handle fetching collaboration requests
  */
 const getCollaborationRequests = AsyncHandler(async (req, res) => {
-    const result = await collaborationService.getRequests(req.user._id, req.query);
+    const result = await collaborationService.getRequests(req.user._id, req.user.role, req.query);
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, result, "Collaboration requests fetched successfully")
     );
@@ -70,6 +70,18 @@ const cancelCollaborationRequest = AsyncHandler(async (req, res) => {
     const request = await collaborationService.updateRequestStatus(requestId, req.user._id, "cancelled");
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, request, "Collaboration request cancelled")
+    );
+});
+
+/**
+ * Handle sending a counter-offer
+ */
+const counterOffer = AsyncHandler(async (req, res) => {
+    const { requestId } = req.params;
+    const collaboration = await collaborationService.counterOffer(requestId, req.user._id, req.body);
+    
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, collaboration, "Counter-offer sent successfully")
     );
 });
 
@@ -257,6 +269,7 @@ export const collaborationController = {
     acceptCollaborationRequest,
     rejectCollaborationRequest,
     cancelCollaborationRequest,
+    counterOffer,
     getCollaborations,
     getCollaborationDetails,
     getLatestCollaborationWithUser,

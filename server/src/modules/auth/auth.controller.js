@@ -49,6 +49,7 @@ const login = AsyncHandler(async (req, res) => {
     if (email) email = email.toLowerCase().trim();
     const { user, accessToken, refreshToken } = await authService.login(email, password);
 
+    console.log(`[LoginSuccess] User: ${user.email}, ID: ${user._id}, Onboarding: ${user.stripeOnboardingComplete}`);
     return res
         .status(validationStatus.ok)
         .cookie("accessToken", String(accessToken), cookieOptions)

@@ -24,20 +24,20 @@ const emitActivity = async ({ user, role, type, title, description, relatedId = 
             relatedId,
             category: category || 'system'
         });
-        
+
         // FUTURE: Socket.io emission would go here
         import('../app.js').then(({ app }) => {
             const io = app.get('socketio');
             if (io) {
-                io.to(user.toString()).emit("notification", { 
-                    title, 
-                    description, 
-                    type, 
+                io.to(user.toString()).emit("notification", {
+                    title,
+                    description,
+                    type,
                     relatedId,
                     category: category || 'system',
                     createdAt: new Date()
                 });
-                
+
                 // Also emit a general "activity_created" for dashboard refreshes
                 io.to(user.toString()).emit("activity_created", { category });
             }

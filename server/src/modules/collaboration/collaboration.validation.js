@@ -9,7 +9,7 @@ const sendRequestSchema = Joi.object({
 });
 
 const requestQuerySchema = Joi.object({
-    status: Joi.string().valid("pending", "accepted", "rejected", "cancelled"),
+    status: Joi.string().valid("requested", "rejected", "awaiting_onboarding", "awaiting_funds", "active", "completed", "cancelled"),
     type: Joi.string().valid("sent", "received", "all"),
     search: Joi.string().allow(''),
     platform: Joi.string().allow(''),
@@ -17,7 +17,13 @@ const requestQuerySchema = Joi.object({
     limit: Joi.number().min(1).max(100).default(10),
 });
 
+const counterOfferSchema = Joi.object({
+    newBudget: Joi.number().min(0.5).required(), // Enforce Stripe minimum
+    note: Joi.string().trim().max(1000).allow(''),
+});
+
 export const collaborationValidation = {
     sendRequestSchema,
     requestQuerySchema,
+    counterOfferSchema,
 };
