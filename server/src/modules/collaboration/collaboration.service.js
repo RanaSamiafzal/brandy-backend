@@ -87,7 +87,8 @@ const getRequests = async (userId, userRole, { status, type, platform, page = 1,
     // Base match
     let matchStage = {
         $or: [{ brand: objectUserId }, { influencer: objectUserId }],
-        isDeleted: false
+        isDeleted: false,
+        status: { $nin: ["active", "in_progress", "completed", "suspended"] }
     };
 
     if (type === "sent") {
@@ -123,7 +124,13 @@ const getRequests = async (userId, userRole, { status, type, platform, page = 1,
             }
         },
         // NEW: Filter status AFTER grouping to ensure we only see the "Latest" status
-        ...(status && status !== "all" ? [{ $match: { status: status } }] : []),
+        ...(status && status !== "all" ? [{ 
+            $match: { 
+                status: status === "pending" ? "requested" 
+                      : status === "accepted" ? { $in: ["accepted", "awaiting_onboarding", "awaiting_funds"] } 
+                      : status 
+            } 
+        }] : []),
 
         // Re-apply sort by latest
         { $sort: { createdAt: -1 } },
@@ -602,6 +609,8 @@ const getCollaborations = async (userId, { status, page = 1, limit = 10 }) => {
                 status: 1,
                 agreedBudget: 1,
                 totalPaidAmount: 1,
+                escrowFunded: 1,
+                stripePaymentIntentId: 1,
                 createdAt: 1,
                 updatedAt: 1,
                 brand: {
@@ -701,6 +710,29 @@ const getCollaborationDetails = async (id, userId) => {
 
     if (!collaboration) {
         throw new ApiError(validationStatus.notFound, "Collaboration not found");
+    }
+
+    // --- PRODUCTION-LEVEL SELF-HEALING SYNC ---
+    // If the project is 'awaiting_funds' or has no funding flag but has a Stripe Intent, verify it now.
+    // This fixes the "Awaiting Funds" badge issue if status is stuck but payment is done.
+    if ((collaboration.status === "awaiting_funds" || !collaboration.escrowFunded) && collaboration.stripePaymentIntentId) {
+        try {
+            console.log(`🔍 Production Sync: Verifying Stripe status for collaboration ${id}`);
+            const paymentIntent = await stripeService.stripe.paymentIntents.retrieve(collaboration.stripePaymentIntentId);
+            
+            if (paymentIntent.status === 'succeeded') {
+                console.log(`✅ Sync Success: Payment confirmed. Force-updating status to ACTIVE.`);
+                // Update DB: Force both flag and status to be correct
+                // We also trigger the handlePaymentIntentSucceeded logic if it hasn't run
+                await stripeService.handlePaymentIntentSucceeded(paymentIntent);
+                
+                // Update local object for immediate response
+                collaboration.escrowFunded = true;
+                collaboration.status = "active";
+            }
+        } catch (err) {
+            console.error("⚠️ Background sync failed:", err.message);
+        }
     }
 
     // Fetch influencer profile for stats
@@ -833,14 +865,17 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
 
         for (const deliverable of collaboration.deliverables) {
             if (deliverable.status === "IN_PROGRESS" && deliverable.inProgressAt <= twentyFourHoursAgo) {
-                console.log(`💰 Cancellation payout triggered for deliverable: ${deliverable._id}`);
+                console.log(`💰 Cancellation payout (50%) triggered for deliverable: ${deliverable._id}`);
                 // Mark as approved to satisfy transfer service requirement
                 deliverable.status = "APPROVED";
                 deliverable.approvedAt = now;
 
-                // We will trigger the transfer after the main update to avoid nested transaction issues if possible, 
-                // or handle it within the same flow if stripeService allows.
-                // Since stripeService handles its own session, we'll call it after save or use a unified session.
+                // --- 50% DEDUCTION RULE ---
+                // We reduce the allocated budget to 50% before triggering transfer
+                const originalBudget = deliverable.allocatedBudget || 0;
+                deliverable.allocatedBudget = Math.round((originalBudget * 0.5) * 100) / 100;
+
+                console.log(`Updated budget for ${deliverable._id}: $${deliverable.allocatedBudget} (50% of $${originalBudget})`);
             }
         }
     } else if (type === "COMPLETE") {
@@ -870,8 +905,6 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
                 await influencerProfile.save();
             }
         }
-    } else if (type === "RESUME") {
-        collaboration.status = "active";
     }
 
     const updatedCollab = await collaboration.save();
@@ -886,6 +919,14 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
                     console.error(`Failed to pay influencer for deliverable ${deliverable._id} during cancellation:`, err.message);
                 }
             }
+        }
+
+        // --- AUTOMATIC REFUND ---
+        // After paying out the influencers, refund anything left in escrow to the brand
+        try {
+            await stripeService.refundCollaborationBalance(updatedCollab._id);
+        } catch (err) {
+            console.error(`Failed to refund brand for collaboration ${updatedCollab._id}:`, err.message);
         }
     }
 
@@ -908,7 +949,6 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
         if (campaign) {
             if (type === "COMPLETE") campaign.status = "completed";
             else if (type === "CANCEL") campaign.status = "cancelled";
-            else if (type === "RESUME") campaign.status = "in_progress";
             await campaign.save();
         }
     }
@@ -982,6 +1022,8 @@ const completeCollaboration = async (id, userId, reviewData) => {
         }
     }
 
+    // Note: No auto-refund here anymore. Full budget is released to influencer via isFinal task.
+
     await emitActivity({
         user: collaboration.influencer._id,
         role: "influencer",
@@ -1006,6 +1048,11 @@ const addDeliverable = async (collaborationId, userId, deliverableData) => {
         throw new ApiError(validationStatus.forbidden, "Only brands can add deliverables");
     }
 
+    // Escrow Check
+    if (!collaboration.escrowFunded) {
+        throw new ApiError(validationStatus.badRequest, "Escrow must be funded before adding deliverables");
+    }
+
     // Budget Validation
     const totalAllocated = collaboration.deliverables.reduce((sum, d) => sum + (d.allocatedBudget || 0), 0);
     const newBudget = deliverableData.allocatedBudget || 0;
@@ -1015,6 +1062,18 @@ const addDeliverable = async (collaborationId, userId, deliverableData) => {
 
     collaboration.deliverables.push(deliverableData);
     await collaboration.save();
+
+    // Notify the influencer
+    await emitActivity({
+        user: collaboration.influencer,
+        role: "influencer",
+        type: "deliverable_updated", // Reusing type or using a generic one
+        title: "New Deliverable Added",
+        description: `A new deliverable has been added to "${collaboration.title || 'your project'}".`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
+
     return collaboration;
 };
 
@@ -1139,45 +1198,48 @@ const reviewDeliverable = async (collaborationId, deliverableId, userId, { statu
         throw new ApiError(validationStatus.badRequest, "Invalid review status");
     }
 
+    // 1. Update in-memory document
+    deliverable.status = status;
     if (status === "APPROVED") {
-        deliverable.status = status;
         deliverable.approvedAt = new Date();
+        deliverable.revisionNotes = ""; 
         if (isFinal !== undefined) deliverable.isFinal = isFinal;
+    } else {
+        deliverable.revisionNotes = revisionNotes || "Please review the requirements.";
+    }
 
-        // Save the collaboration so the database reflects the APPROVED status 
-        // before stripeService fetches it.
-        await collaboration.save();
+    // 2. Save once
+    await collaboration.save();
 
-        // --- STRIPE PAYOUT TRIGGER ---
-        // If escrow was funded and it's unpaid, we can transfer
-        if (collaboration.escrowFunded && deliverable.paymentStatus === "unpaid") {
-            try {
-                // Call Stripe Service to transfer funds
-                await stripeService.transferDeliverablePayout(collaborationId, deliverableId);
-                // Note: transferDeliverablePayout saves the collaboration inside its transaction!
-                // We should return the updated collaboration directly by re-fetching it
-                const updatedCollab = await Collaboration.findById(collaborationId);
+    // 3. Handle Payout if approved
+    if (status === "APPROVED" && collaboration.escrowFunded && deliverable.paymentStatus === "unpaid") {
+        try {
+            await stripeService.transferDeliverablePayout(collaborationId, deliverableId);
+            
+            // Re-fetch to get updated payment status and transfer ID
+            const updatedCollab = await Collaboration.findById(collaborationId);
 
-                await emitActivity({
-                    user: updatedCollab.influencer,
-                    role: 'influencer',
-                    type: 'deliverable_approved_paid',
-                    title: 'Deliverable Approved & Paid',
-                    description: `Your deliverable "${deliverable.title}" was approved and payout has been transferred!`,
-                    relatedId: updatedCollab._id,
-                    category: 'collaboration'
-                });
+            await emitActivity({
+                user: updatedCollab.influencer,
+                role: 'influencer',
+                type: 'deliverable_approved_paid',
+                title: 'Deliverable Approved & Paid',
+                description: `Your deliverable "${deliverable.title}" was approved and payout has been transferred!`,
+                relatedId: updatedCollab._id,
+                category: 'collaboration'
+            });
 
-                return updatedCollab;
-            } catch (payoutError) {
-                console.error("Payout failed during deliverable approval:", payoutError);
-                throw new ApiError(500, "Deliverable approved but payout failed: " + payoutError.message);
-            }
+            return updatedCollab;
+        } catch (payoutError) {
+            console.error("Payout failed during deliverable approval:", payoutError);
+            // We don't throw here to avoid rolling back the "APPROVED" status in DB, 
+            // but we should inform the user that payout failed.
+            // Actually, throwing is better for visibility, but the status is already saved.
+            throw new ApiError(500, "Deliverable approved but payout failed: " + payoutError.message);
         }
     }
 
-    await collaboration.save();
-
+    // 4. Activity for normal approval or revision
     await emitActivity({
         user: collaboration.influencer,
         role: "influencer",
@@ -1206,6 +1268,18 @@ const deleteDeliverable = async (collaborationId, deliverableId, userId) => {
 
     collaboration.deliverables.pull(deliverableId);
     await collaboration.save();
+
+    // Notify the influencer
+    await emitActivity({
+        user: collaboration.influencer,
+        role: "influencer",
+        type: "deliverable_updated",
+        title: "Deliverable Removed",
+        description: `A deliverable was removed from "${collaboration.title || 'your project'}".`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
+
     return collaboration;
 };
 

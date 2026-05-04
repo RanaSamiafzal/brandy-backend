@@ -16,6 +16,7 @@ router.get('/history', stripeController.getPaymentHistory);
 
 // Brand: Fund Escrow & Card Management
 router.post('/escrow/fund', roleMiddleware("brand"), stripeController.fundEscrow);
+router.post('/escrow/sync', roleMiddleware("brand"), stripeController.syncEscrowStatus);
 router.get('/methods', roleMiddleware("brand"), stripeController.getPaymentMethods);
 router.post('/methods/setup', roleMiddleware("brand"), stripeController.createSetupIntent);
 router.delete('/methods/:id', roleMiddleware("brand"), stripeController.removePaymentMethod);

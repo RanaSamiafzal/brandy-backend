@@ -135,10 +135,19 @@ const getAnalyticsDashboard = async (userId) => {
 
     // Fetch total spending from Payment model
     const paymentStats = await Payment.aggregate([
-        { $match: { brand: new mongoose.Types.ObjectId(userId), status: 'completed' } },
-        { $group: { _id: null, total: { $sum: "$amount" } } }
+        { $match: { brand: new mongoose.Types.ObjectId(userId), status: { $in: ['completed', 'pending', 'requested', 'pending_approval', 'approved', 'processing'] } } },
+        { $group: { _id: "$status", total: { $sum: "$amount" } } }
     ]);
-    const totalSpending = paymentStats[0]?.total || 0;
+    
+    let totalReleased = 0;
+    let fundsInEscrow = 0;
+    
+    paymentStats.forEach(stat => {
+        if (stat._id === 'completed') totalReleased += stat.total;
+        else fundsInEscrow += stat.total;
+    });
+    
+    const totalSpending = totalReleased + fundsInEscrow;
 
     // If no campaigns have analytics, or they are all 0, seed some sample data
     const hasAnalytics = campaigns.some(c => c.reach > 0);
@@ -173,7 +182,10 @@ const getAnalyticsDashboard = async (userId) => {
             accepted: 0,
             pending: 0,
             total: 0
-        }
+        },
+        fundsInEscrow,
+        totalReleased,
+        recentTransactions: []
     };
 
     // Fetch collaboration/request data
@@ -258,8 +270,6 @@ const getAnalyticsDashboard = async (userId) => {
     Object.keys(stats.platformStats).forEach(p => {
         if (stats.platformStats[p].posts > 0) {
             stats.platformStats[p].engagement = (stats.platformStats[p].engagement / stats.platformStats[p].posts).toFixed(1);
-            // Mock followers gained for polish
-            stats.platformStats[p].followers = Math.floor(stats.platformStats[p].reach * 0.05);
         }
     });
 
@@ -288,9 +298,24 @@ const getAnalyticsDashboard = async (userId) => {
             id: p.id,
             name: p.name,
             avatar: p.avatar,
-            reach: p.totalEarnings > 1000 ? `${(p.totalEarnings / 1000).toFixed(1)}K` : `$${p.totalEarnings}`, // Using earnings as a primary metric display
-            engagement: p.rating ? `${p.rating} Stars` : "No rating"
+            earnings: p.totalEarnings,
+            rating: p.rating || 0
         }));
+
+    // Fetch real recent transactions
+    const recentTransactions = await Payment.find({ brand: userId })
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .populate('campaign', 'name')
+        .lean();
+
+    stats.recentTransactions = recentTransactions.map(t => ({
+        id: t._id,
+        name: t.campaign?.name || 'Campaign Payment',
+        amount: t.amount,
+        status: t.status,
+        date: t.createdAt
+    }));
 
     return stats;
 };

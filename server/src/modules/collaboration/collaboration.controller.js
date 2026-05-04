@@ -118,27 +118,7 @@ const cancelCollaboration = AsyncHandler(async (req, res) => {
     );
 });
 
-/**
- * Handle pausing an active collaboration
- */
-const pauseCollaboration = AsyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const collaboration = await collaborationService.updateCollaborationStatus(id, req.user._id, "paused");
-    return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, collaboration, "Collaboration paused successfully")
-    );
-});
 
-/**
- * Handle resuming a paused collaboration (Direct Brand Action)
- */
-const resumeCollaboration = AsyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const collaboration = await collaborationService.updateCollaborationStatus(id, req.user._id, "active");
-    return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, collaboration, "Collaboration resumed successfully")
-    );
-});
 
 /**
  * Handle suspending a collaboration
@@ -275,8 +255,6 @@ export const collaborationController = {
     getLatestCollaborationWithUser,
     cancelCollaboration,
     completeCollaboration,
-    pauseCollaboration,
-    resumeCollaboration,
     suspendCollaboration,
     submitActionRequest,
     handleActionRequest,

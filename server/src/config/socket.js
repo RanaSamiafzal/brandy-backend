@@ -4,9 +4,20 @@ import User from "../modules/user/user.model.js";
 const initializeSocket = (httpServer, app) => {
     const io = new Server(httpServer, {
         cors: {
-            origin: ["http://localhost:5173", "http://localhost:3000", process.env.CORS_ORIGIN],
+            origin: [
+                "http://localhost:5173", 
+                "http://localhost:3000", 
+                "http://127.0.0.1:5173", 
+                "http://127.0.0.1:3000", 
+                process.env.CORS_ORIGIN
+            ].filter(Boolean),
             credentials: true
-        }
+        },
+        transports: ['websocket', 'polling'],
+        pingTimeout: 60000,
+        pingInterval: 25000,
+        connectTimeout: 45000,
+        allowEIO3: true // Support for older clients if necessary
     });
 
     app.set('socketio', io);

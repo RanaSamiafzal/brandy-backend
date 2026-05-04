@@ -1,4 +1,5 @@
 import Activity from "../modules/activity/activity.model.js"
+import Notification from "../modules/notification/notification.model.js"
 
 /**
  * Creates an activity log entry.
@@ -15,6 +16,7 @@ import Activity from "../modules/activity/activity.model.js"
  */
 const emitActivity = async ({ user, role, type, title, description, relatedId = null, category }) => {
     try {
+        // 1. Save to Activity log
         await Activity.create({
             user,
             role,
@@ -25,20 +27,34 @@ const emitActivity = async ({ user, role, type, title, description, relatedId = 
             category: category || 'system'
         });
 
-        // FUTURE: Socket.io emission would go here
+        // 2. Save to Notification model so the REST /notifications API returns it
+        const notification = await Notification.create({
+            user,
+            type,
+            category: category || 'system',
+            title,
+            message: description,   // frontend expects 'message', not 'description'
+            relatedId,
+            isRead: false
+        });
+
+        // 3. Emit real-time socket event with the correct event name the frontend listens for
         import('../app.js').then(({ app }) => {
             const io = app.get('socketio');
             if (io) {
-                io.to(user.toString()).emit("notification", {
+                // Must match: newSocket.on('notification_received', ...) in SocketContext.jsx
+                io.to(user.toString()).emit("notification_received", {
+                    _id: notification._id,
                     title,
-                    description,
+                    message: description,
                     type,
-                    relatedId,
                     category: category || 'system',
-                    createdAt: new Date()
+                    relatedId,
+                    isRead: false,
+                    createdAt: notification.createdAt
                 });
 
-                // Also emit a general "activity_created" for dashboard refreshes
+                // Also emit for dashboard badge refreshes
                 io.to(user.toString()).emit("activity_created", { category });
             }
         }).catch(err => console.error("Socket emit error:", err));

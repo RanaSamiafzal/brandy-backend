@@ -23,7 +23,7 @@ const deliverableSchema = new Schema(
         },
         status: {
             type: String,
-            enum: ["PENDING", "IN_PROGRESS", "SUBMITTED", "APPROVED"],
+            enum: ["PENDING", "IN_PROGRESS", "SUBMITTED", "APPROVED", "DELIVERED", "REVISION_REQUESTED"],
             default: "PENDING",
         },
         paymentStatus: {
@@ -154,7 +154,7 @@ const collaborationSchema = new Schema(
         },
         status: {
             type: String,
-            enum: ["requested", "rejected", "awaiting_onboarding", "awaiting_funds", "active", "completed", "cancelled"],
+            enum: ["requested", "rejected", "awaiting_onboarding", "awaiting_funds", "active", "in_progress", "review", "completed", "suspended", "cancelled"],
             default: "requested",
             index: true,
         },
@@ -169,7 +169,7 @@ const collaborationSchema = new Schema(
         actionRequest: {
             type: {
                 type: String,
-                enum: ["CANCEL", "COMPLETE", "RESUME", "NONE"],
+                enum: ["CANCEL", "COMPLETE", "NONE"],
                 default: "NONE"
             },
             requestedBy: { type: Schema.Types.ObjectId, ref: "User" },

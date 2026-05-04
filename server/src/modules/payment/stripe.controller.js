@@ -23,6 +23,20 @@ const fundEscrow = AsyncHandler(async (req, res) => {
 });
 
 /**
+ * Brand: Manually sync escrow status if webhook is delayed
+ */
+const syncEscrowStatus = AsyncHandler(async (req, res) => {
+    const { collaborationId } = req.body;
+    if (!collaborationId) throw new ApiError(validationStatus.badRequest, "collaborationId is required");
+
+    const result = await stripeService.syncEscrowStatus(collaborationId);
+
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, result, "Escrow status synced")
+    );
+});
+
+/**
  * Influencer: Start a deliverable (Set to IN_PROGRESS)
  */
 const startDeliverable = AsyncHandler(async (req, res) => {
@@ -207,6 +221,7 @@ const stripeWebhook = async (req, res) => {
 
 export const stripeController = {
     fundEscrow,
+    syncEscrowStatus,
     startDeliverable,
     submitDeliverable,
     approveDeliverable,

@@ -161,21 +161,23 @@ const getDashboardStats = async (userId, days = 30) => {
 
     // Fetch total earnings from Payment model
     const paymentStats = await Payment.aggregate([
-        { $match: { influencer: objectUserId, status: 'completed' } },
-        { $group: { _id: null, total: { $sum: "$amount" } } }
+        { $match: { influencer: objectUserId, status: { $in: ['completed', 'pending', 'requested', 'pending_approval', 'approved', 'processing'] } } },
+        { $group: { _id: "$status", total: { $sum: "$amount" } } }
     ]);
-    const allTimeEarnings = paymentStats[0]?.total || 0;
+    
+    let allTimeEarnings = 0;
+    let pendingClearance = 0;
+    
+    paymentStats.forEach(stat => {
+        if (stat._id === 'completed') allTimeEarnings += stat.total;
+        else pendingClearance += stat.total;
+    });
 
     const finalAnalytics = {
         totalEarnings: current.earnings,
         allTimeEarnings,
         availablePayout: allTimeEarnings, // Since payments are immediately transferred to Connect
-        pendingClearance: allCollaborations.reduce((acc, collab) => {
-            if (!collab.escrowFunded) return acc;
-            const deliverableCount = collab.deliverables?.length || 1;
-            const unapprovedCount = collab.deliverables?.filter(d => d.status !== "APPROVED").length || 0;
-            return acc + ((collab.agreedBudget / deliverableCount) * unapprovedCount);
-        }, 0),
+        pendingClearance,
         engagementRate: current.engagementCount > 0 ? parseFloat((current.engagementSum / current.engagementCount).toFixed(1)) : 0,
         collaborationCount: current.count,
         tasksCompleted: {
@@ -247,6 +249,23 @@ const getDashboardStats = async (userId, days = 30) => {
         .sort({ createdAt: -1 })
         .limit(5)
         .lean();
+
+    // Fetch real recent transactions
+    const recentTransactions = await Payment.find({ influencer: objectUserId })
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .populate('campaign', 'name')
+        .populate('brand', 'profilePic fullname')
+        .lean();
+
+    finalAnalytics.recentTransactions = recentTransactions.map(t => ({
+        id: t._id,
+        campaignName: t.campaign?.name || 'Campaign Payment',
+        brandPic: t.brand?.profilePic,
+        amount: t.amount,
+        status: t.status,
+        date: t.createdAt
+    }));
 
     return {
         stats: {

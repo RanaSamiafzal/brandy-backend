@@ -32,11 +32,7 @@ router.route("/:id/cancel")
 router.route("/:id/complete")
     .patch(collaborationController.completeCollaboration);
 
-router.route("/:id/pause")
-    .patch(collaborationController.pauseCollaboration);
 
-router.route("/:id/resume")
-    .patch(collaborationController.resumeCollaboration);
 
 router.route("/:id/suspend")
     .patch(collaborationController.suspendCollaboration);

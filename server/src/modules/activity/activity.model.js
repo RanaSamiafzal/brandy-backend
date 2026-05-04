@@ -9,7 +9,7 @@ const ActivitySchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ['brand', 'influencer', 'admin'],
+            enum: ['brand', 'influencer', 'admin', 'user'],
             required: true
         },
         type: {
@@ -25,14 +25,28 @@ const ActivitySchema = new mongoose.Schema(
                 "profile_updated",
                 "password_changed",
                 "collaboration_request_sent",
+                "collaboration_request_received",
                 "collaboration_accepted",
                 "collaboration_started",
+                "collaboration_active",
+                "collaboration_paused",
+                "collaboration_suspended",
                 "collaboration_cancelled",
                 "collaboration_completed",
                 "deliverable_created",
+                "deliverable_updated",
                 "deliverable_submitted",
                 "deliverable_approved",
-                "revision_requested"
+                "deliverable_approved_paid",
+                "deliverable_revision_requested",
+                "revision_requested",
+                "collab_request_cancel",
+                "collab_request_complete",
+                "collab_request_resume",
+                "collab_request_rejected",
+                "collab_request_approved",
+                "influencer_review_received",
+                "escrow_funded"
             ],
             required: true
         },

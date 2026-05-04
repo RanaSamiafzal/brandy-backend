@@ -9,7 +9,7 @@ import { sendNotification } from '../../utils/notificationUtils.js';
 import { emitActivity } from '../../utils/activityUtils.js';
 import Campaign from '../campaign/campaign.model.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 /**
  * Creates a Stripe Connect Account for an Influencer
@@ -55,7 +55,54 @@ export const createAccountLink = async (accountId) => {
 };
 
 /**
+ * Manually sync the escrow status of a collaboration with Stripe.
+ * Useful if webhooks are delayed or failing.
+ */
+export const syncEscrowStatus = async (collaborationId) => {
+    const collaboration = await Collaboration.findById(collaborationId).populate('campaign');
+    if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
+
+    if (collaboration.escrowFunded) {
+        return { alreadyFunded: true, status: collaboration.status };
+    }
+
+    if (!collaboration.stripePaymentIntentId) {
+        return { alreadyFunded: false, needsPayment: true };
+    }
+
+    try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(collaboration.stripePaymentIntentId);
+        
+        if (paymentIntent.status === 'succeeded') {
+            // Update collaboration to active/funded
+            collaboration.escrowFunded = true;
+            collaboration.status = "active";
+            
+            await collaboration.save();
+
+            // Sync Campaign status
+            if (collaboration.campaign) {
+                await Campaign.findByIdAndUpdate(collaboration.campaign, { $set: { status: 'active' } });
+            }
+
+            return { alreadyFunded: true, status: "active", updated: true };
+        }
+
+        return { 
+            alreadyFunded: false, 
+            status: paymentIntent.status,
+            clientSecret: paymentIntent.client_secret,
+            paymentIntentId: paymentIntent.id
+        };
+    } catch (err) {
+        console.error("Sync Escrow Status Error:", err.message);
+        return { alreadyFunded: false, error: err.message };
+    }
+};
+
+/**
  * Creates a Stripe PaymentIntent for Brand Escrow Payment
+ * Enhanced: Reuses existing PaymentIntents and saves ID to DB immediately to prevent double charges.
  */
 export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
     const collaboration = await Collaboration.findById(collaborationId).populate('campaign');
@@ -65,12 +112,32 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
         throw new ApiError(validationStatus.forbidden, "Only the assigned brand can fund this escrow");
     }
 
-    if (collaboration.status !== "awaiting_funds") {
+    if (collaboration.status !== "awaiting_funds" && collaboration.status !== "active") {
         throw new ApiError(validationStatus.badRequest, `Collaboration is in ${collaboration.status} state, not awaiting_funds`);
     }
 
+    // Check if already funded
     if (collaboration.escrowFunded) {
         throw new ApiError(validationStatus.badRequest, `Escrow for this collaboration is already funded`);
+    }
+
+    // --- REUSE LOGIC ---
+    // If we already have a PaymentIntent ID, check its status on Stripe
+    if (collaboration.stripePaymentIntentId) {
+        const syncResult = await syncEscrowStatus(collaborationId);
+        if (syncResult.alreadyFunded) {
+            return {
+                alreadyFunded: true,
+                message: "This project has already been funded."
+            };
+        }
+        
+        if (syncResult.clientSecret) {
+            return {
+                clientSecret: syncResult.clientSecret,
+                paymentIntentId: syncResult.paymentIntentId
+            };
+        }
     }
 
     // Ensure brand has a Stripe Customer ID
@@ -100,7 +167,7 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
         throw new ApiError(validationStatus.badRequest, `The project budget ($${collaboration.agreedBudget}) is below the minimum required for online payment ($0.50). Please update the collaboration budget first.`);
     }
 
-    // Create a PaymentIntent
+    // Create a PaymentIntent with Idempotency Key
     const paymentIntent = await stripe.paymentIntents.create({
         amount: amountCents,
         currency: collaboration.currency.toLowerCase(),
@@ -113,6 +180,14 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
             influencerId: collaboration.influencer.toString(),
             type: 'escrow_funding'
         },
+    }, {
+        idempotencyKey: `escrow_fund_${collaborationId}_${amountCents}`
+    });
+
+    // CRITICAL: Save the PaymentIntent ID to the collaboration record IMMEDIATELY
+    // This allows the self-healing sync to work even if the webhook fails.
+    await Collaboration.findByIdAndUpdate(collaborationId, {
+        $set: { stripePaymentIntentId: paymentIntent.id }
     });
 
     return {
@@ -139,18 +214,6 @@ export const handlePaymentIntentSucceeded = async (paymentIntent) => {
         collaboration.escrowFunded = true;
         collaboration.stripePaymentIntentId = paymentIntent.id;
         collaboration.status = "active";
-
-        // Automatically create the first task if deliverables are empty
-        if (!collaboration.deliverables || collaboration.deliverables.length === 0) {
-            const campaign = await Campaign.findById(collaboration.campaign);
-            collaboration.deliverables.push({
-                title: "Initial Campaign Content",
-                platform: (campaign?.platform && campaign.platform.length > 0) ? campaign.platform[0] : "other",
-                description: campaign?.deliverables || "Complete the primary content requirements for this campaign.",
-                dueDate: campaign?.campaignTimeline?.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default 7 days if no end date
-                status: "PENDING"
-            });
-        }
 
         await collaboration.save();
 
@@ -378,12 +441,55 @@ export const getPaymentHistory = async (userId, role) => {
         .lean();
 };
 
+/**
+ * Refunds the remaining escrow balance back to the brand
+ */
+export const refundCollaborationBalance = async (collaborationId) => {
+    const collaboration = await Collaboration.findById(collaborationId);
+    if (!collaboration || !collaboration.stripePaymentIntentId) {
+        throw new ApiError(validationStatus.badRequest, "No payment found to refund");
+    }
+
+    if (!collaboration.escrowFunded) return;
+
+    const remainingAmount = collaboration.agreedBudget - collaboration.totalPaidAmount;
+    if (remainingAmount <= 0) return;
+
+    const amountCents = Math.round(remainingAmount * 100);
+
+    const refund = await stripe.refunds.create({
+        payment_intent: collaboration.stripePaymentIntentId,
+        amount: amountCents,
+        reason: 'requested_by_customer',
+        metadata: {
+            collaborationId: collaborationId.toString(),
+            type: 'collaboration_cancellation_refund'
+        }
+    });
+
+    // Update payment record or log it
+    await Payment.create({
+        collaboration: collaborationId,
+        brand: collaboration.brand,
+        influencer: collaboration.influencer,
+        amount: remainingAmount,
+        currency: collaboration.currency,
+        status: 'refunded',
+        stripeTransferId: refund.id,
+        description: `Refund of remaining escrow balance for cancelled/completed project.`
+    });
+
+    return refund;
+};
+
 export const stripeService = {
     createConnectAccount,
     createAccountLink,
     createEscrowPaymentIntent,
     handlePaymentIntentSucceeded,
+    syncEscrowStatus,
     transferDeliverablePayout,
+    refundCollaborationBalance,
     listPaymentMethods,
     createSetupIntent,
     detachPaymentMethod,

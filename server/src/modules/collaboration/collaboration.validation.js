@@ -9,7 +9,7 @@ const sendRequestSchema = Joi.object({
 });
 
 const requestQuerySchema = Joi.object({
-    status: Joi.string().valid("requested", "rejected", "awaiting_onboarding", "awaiting_funds", "active", "completed", "cancelled"),
+    status: Joi.string().valid("requested", "rejected", "awaiting_onboarding", "awaiting_funds", "active", "completed", "cancelled", "pending", "accepted"),
     type: Joi.string().valid("sent", "received", "all"),
     search: Joi.string().allow(''),
     platform: Joi.string().allow(''),
