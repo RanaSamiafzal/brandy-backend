@@ -27,35 +27,36 @@ router.route("/:id")
     .get(collaborationController.getCollaborationDetails);
 
 router.route("/:id/cancel")
-    .patch(collaborationController.cancelCollaboration);
+    .patch(validate(collaborationValidation.reasonSchema), collaborationController.cancelCollaboration);
 
 router.route("/:id/complete")
     .patch(collaborationController.completeCollaboration);
-
-
 
 router.route("/:id/suspend")
     .patch(collaborationController.suspendCollaboration);
 
 router.route("/:id/request-action")
-    .post(collaborationController.submitActionRequest);
+    .post(validate(collaborationValidation.actionRequestSchema), collaborationController.submitActionRequest);
 
 router.route("/:id/handle-action")
-    .post(collaborationController.handleActionRequest);
+    .post(validate(collaborationValidation.handleActionSchema), collaborationController.handleActionRequest);
 
 // Deliverables management
 router.route("/:id/deliverables")
-    .post(collaborationController.addDeliverable);
+    .post(validate(collaborationValidation.deliverableSchema), collaborationController.addDeliverable);
 
 router.route("/:id/deliverables/:deliverableId")
-    .patch(collaborationController.updateDeliverable)
+    .patch(validate(collaborationValidation.updateDeliverableSchema), collaborationController.updateDeliverable)
     .delete(collaborationController.deleteDeliverable);
 
-router.post("/:id/deliverables/:deliverableId/submit", collaborationController.submitDeliverable);
-router.patch("/:id/deliverables/:deliverableId/review", collaborationController.reviewDeliverable);
+router.post("/:id/deliverables/:deliverableId/submit", validate(collaborationValidation.submitDeliverableSchema), collaborationController.submitDeliverable);
+router.patch("/:id/deliverables/:deliverableId/review", validate(collaborationValidation.reviewDeliverableSchema), collaborationController.reviewDeliverable);
 
 // Influencer reviews brand (post-completion)
-router.post("/:id/influencer-review", collaborationController.submitInfluencerReview);
+router.post("/:id/influencer-review", validate(collaborationValidation.influencerReviewSchema), collaborationController.submitInfluencerReview);
+
+// Agreement confirmation
+router.post("/:id/confirm-agreement", collaborationController.confirmAgreement);
 
 export default router;
 

@@ -615,7 +615,7 @@ The user journey is designed to be linear and friction-free:
 1.  **Onboarding**: User registers and selects a role (Brand/Influencer).
 2.  **Discovery**: Brand posts a campaign; Influencer finds it and applies.
 3.  **Negotiation**: Brand accepts application; system creates a Collaboration workspace.
-4.  **Execution**: Parties sign agreement -> Brand fund Escrow -> Influencer submits tasks.
+4.  **Execution**: Parties sign agreement -> Brand funds Escrow -> Influencer submits tasks.
 5.  **Completion**: Brand approves work -> System releases payment -> Project closes.
 
 ## 5.3 Form Design & Validation

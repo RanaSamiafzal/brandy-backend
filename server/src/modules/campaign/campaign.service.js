@@ -356,7 +356,6 @@ const getAllCampaigns = async ({
         createdAt: 1,
         brand: 1,
         "brandProfile.brandname": 1,
-        "brandProfile.logo": 1,
         "brandProfile.industry": 1,
         "brandProfile.socialMedia": 1,
         "brandProfile._id": 1,

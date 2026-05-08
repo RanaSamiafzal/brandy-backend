@@ -132,7 +132,14 @@ CampaignSchema.index({ name: 'text' });
 
 // Normal indexes for filtering
 CampaignSchema.index({ brand: 1, status: 1 });
-CampaignSchema.index({ startDate: 1, endDate: 1 });
+// Fixed timeline index
+CampaignSchema.index({ "campaignTimeline.startDate": 1, "campaignTimeline.endDate": 1 });
+
+// Optimization Compound Indexes for Heavy Queries
+CampaignSchema.index({ brand: 1, isDeleted: 1, createdAt: -1 });
+CampaignSchema.index({ status: 1, isDeleted: 1, "campaignTimeline.endDate": 1 });
+CampaignSchema.index({ industry: 1 });
+CampaignSchema.index({ platform: 1 });
 
 const Campaign = mongoose.model("Campaign", CampaignSchema);
 

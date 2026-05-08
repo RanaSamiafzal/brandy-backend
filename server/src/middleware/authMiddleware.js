@@ -18,6 +18,12 @@ export const verifyJwt=AsyncHandler(async(req,res,next)=>{
  if(!user){
     throw new ApiError(validationStatus.unauthorized,'invalid access token')
  }
+ if(user.isBlocked){
+    throw new ApiError(validationStatus.forbidden,'Your account has been blocked. Contact support.')
+ }
+ if(user.isDeactivated){
+    throw new ApiError(validationStatus.forbidden,'Your account is deactivated. Please login to reactivate.')
+ }
  req.user = user;
  next();
     } catch (error) {

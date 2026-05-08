@@ -385,6 +385,17 @@ const updateProfile = async (userId, updateData) => {
         delete updateData.portfolio;
     }
 
+    // Sync images to User model
+    if (updateData.profilePicture || updateData.coverImage) {
+        const userUpdates = {};
+        if (updateData.profilePicture) userUpdates.profilePic = updateData.profilePicture;
+        if (updateData.coverImage) userUpdates.coverPic = updateData.coverImage;
+        await User.findByIdAndUpdate(userId, userUpdates);
+        
+        delete updateData.profilePicture;
+        delete updateData.coverImage;
+    }
+
     // Update other fields
     Object.keys(updateData).forEach(key => {
         if (updateData[key] !== undefined) {
@@ -538,7 +549,8 @@ const searchInfluencers = async ({
             $group: {
                 _id: "$_id",
                 username: { $first: "$username" },
-                profilePicture: { $first: { $cond: [{ $ifNull: ["$profilePicture", false] }, "$profilePicture", "$userDetails.profilePic"] } },
+                profilePicture: { $first: "$userDetails.profilePic" },
+                coverImage: { $first: "$userDetails.coverPic" },
                 category: { $first: "$category" },
                 averageRating: { 
                   $first: { 

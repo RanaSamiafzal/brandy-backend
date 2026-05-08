@@ -20,6 +20,16 @@ import User from "./modules/user/user.model.js";
 import { app } from './app.js'
 import initializeSocket from "./config/socket.js";
 
+import mongoose from "mongoose";
+
+const requiredEnvVars = ["MONGODB_URI", "ACCESS_TOKEN_SECRET", "CORS_ORIGIN", "STRIPE_SECRET_KEY"];
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+    console.error(`FATAL ERROR: Missing required environment variables: ${missingEnvVars.join(", ")}`);
+    process.exit(1);
+}
+
 const port = process.env.PORT || 8000;
 
 const httpServer = createServer(app);
@@ -37,5 +47,19 @@ connectDB()
     })
     .catch((err) => {
         console.log("MONGODB Connection failed !!! ", err);
+        process.exit(1);
+    });
 
-    })
+const shutdown = () => {
+    console.log("Received shutdown signal. Closing HTTP server...");
+    httpServer.close(() => {
+        console.log("HTTP server closed.");
+        mongoose.connection.close(false).then(() => {
+            console.log("MongoDB connection closed.");
+            process.exit(0);
+        });
+    });
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

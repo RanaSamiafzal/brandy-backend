@@ -225,8 +225,7 @@ const deleteDeliverable = AsyncHandler(async (req, res) => {
  */
 const submitInfluencerReview = AsyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { reviewData } = req.body;
-    const collaboration = await collaborationService.submitInfluencerReview(id, req.user._id, reviewData);
+    const collaboration = await collaborationService.submitInfluencerReview(id, req.user._id, req.body);
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, collaboration, "Review submitted successfully")
     );
@@ -264,4 +263,11 @@ export const collaborationController = {
     reviewDeliverable,
     deleteDeliverable,
     submitInfluencerReview,
+    confirmAgreement: AsyncHandler(async (req, res) => {
+        const { id } = req.params;
+        const collaboration = await collaborationService.confirmAgreement(id, req.user._id);
+        return res.status(validationStatus.ok).json(
+            new ApiResponse(validationStatus.ok, collaboration, "Agreement confirmed successfully")
+        );
+    }),
 };

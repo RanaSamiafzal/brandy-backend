@@ -68,7 +68,7 @@ export const formatAndRankInfluencers = (scoredInfluencers) => {
     
     // Attempting safely fallback to nested user schema if hydrated
     const name = inf.fullname || (inf.user && inf.user.fullname) || inf.username;
-    const profileImage = inf.coverImage || (inf.user && inf.user.profilePic) || "";
+    const profileImage = (inf.user && inf.user.profilePic) || inf.profilePicture || "";
 
     return {
       id: inf._id,

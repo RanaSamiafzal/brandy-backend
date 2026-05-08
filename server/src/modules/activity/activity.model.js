@@ -43,10 +43,12 @@ const ActivitySchema = new mongoose.Schema(
                 "collab_request_cancel",
                 "collab_request_complete",
                 "collab_request_resume",
+                "collab_request_add_tasks",
                 "collab_request_rejected",
                 "collab_request_approved",
                 "influencer_review_received",
-                "escrow_funded"
+                "escrow_funded",
+                "payout_released"
             ],
             required: true
         },

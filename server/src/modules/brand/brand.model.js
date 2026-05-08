@@ -37,10 +37,7 @@ const BrandSchema = new mongoose.Schema(
             default: "",
             trim: true,
         },
-        logo: {
-            type: String,
-            default: "",
-        },
+
         followersCount: {
             type: Number,
             default: 0,

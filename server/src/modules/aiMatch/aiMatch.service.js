@@ -60,7 +60,7 @@ export const getFilteredInfluencers = async (campaign) => {
           username: 1,
           category: 1,
           about: 1,
-          coverImage: 1,
+          coverImage: "$userDetails.coverPic",
           platforms: 1,
           socialMedia: 1,
           location: 1,

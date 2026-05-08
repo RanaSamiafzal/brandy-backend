@@ -62,6 +62,10 @@ const deliverableSchema = new Schema(
         isFinal: {
             type: Boolean,
             default: false,
+        },
+        isAdditional: {
+            type: Boolean,
+            default: false,
         }
     },
     { _id: true }
@@ -112,9 +116,23 @@ const collaborationSchema = new Schema(
             type: Boolean,
             default: false,
         },
+        totalFundedAmount: {
+            type: Number,
+            default: 0,
+        },
         stripePaymentIntentId: {
             type: String,
         },
+        fundingHistory: [{
+            amount: Number,
+            paymentIntentId: String,
+            fundedAt: { type: Date, default: Date.now }
+        }],
+        refundHistory: [{
+            amount: Number,
+            refundId: String,
+            createdAt: { type: Date, default: Date.now }
+        }],
         title: {
             type: String,
             trim: true,
@@ -169,7 +187,7 @@ const collaborationSchema = new Schema(
         actionRequest: {
             type: {
                 type: String,
-                enum: ["CANCEL", "COMPLETE", "NONE"],
+                enum: ["CANCEL", "COMPLETE", "ADD_TASKS", "NONE"],
                 default: "NONE"
             },
             requestedBy: { type: Schema.Types.ObjectId, ref: "User" },
@@ -179,7 +197,11 @@ const collaborationSchema = new Schema(
                 enum: ["PENDING", "APPROVED", "REJECTED", "IDLE"],
                 default: "IDLE"
             },
-            requestedAt: { type: Date }
+            requestedAt: { type: Date },
+            proposedTasks: {
+                type: [deliverableSchema],
+                default: []
+            }
         },
         cancellationReason: {
             type: String,
@@ -216,6 +238,18 @@ const collaborationSchema = new Schema(
             type: Date,
             default: null,
         },
+        brandAgreed: {
+            type: Boolean,
+            default: false,
+        },
+        influencerAgreed: {
+            type: Boolean,
+            default: false,
+        },
+        agreedAt: {
+            type: Date,
+            default: null,
+        }
     },
     {
         timestamps: true,
@@ -226,6 +260,11 @@ collaborationSchema.index({ brand: 1, influencer: 1 });
 collaborationSchema.index({ brand: 1, status: 1 });
 collaborationSchema.index({ influencer: 1, status: 1 });
 collaborationSchema.index({ isDeleted: 1, createdAt: -1 });
+
+// Optimization Compound Indexes for Heavy Queries
+collaborationSchema.index({ brand: 1, isDeleted: 1, createdAt: -1 });
+collaborationSchema.index({ influencer: 1, isDeleted: 1, createdAt: -1 });
+collaborationSchema.index({ campaign: 1, status: 1 });
 
 const Collaboration = mongoose.model("Collaboration", collaborationSchema);
 export default Collaboration;

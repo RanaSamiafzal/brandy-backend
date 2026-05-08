@@ -29,7 +29,7 @@ router.post("/forgot-password", validate(authValidation.forgotPasswordSchema), a
 
 router.post("/reset-password", validate(authValidation.resetPasswordSchema), authController.resetPassword);
 
-router.post("/change-password", verifyJwt, authController.changePassword);
+router.post("/change-password", verifyJwt, validate(authValidation.changePasswordSchema), authController.changePassword);
 router.post("/send-otp", verifyJwt, authController.sendOTP);
 router.post("/verify-otp", verifyJwt, authController.verifyOTP);
 

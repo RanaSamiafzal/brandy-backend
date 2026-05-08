@@ -20,7 +20,9 @@ export const validate = (schema, source = 'body') => (req, res, next) => {
                 unflattened[key] = req[source][key];
             }
         });
-        req[source] = unflattened;
+        // Update in place
+        Object.keys(req[source]).forEach(key => delete req[source][key]);
+        Object.assign(req[source], unflattened);
     }
 
     const { error, value } = schema.validate(req[source], {
@@ -35,10 +37,20 @@ export const validate = (schema, source = 'body') => (req, res, next) => {
         return next(new ApiError(validationStatus.badRequest, errorMessage));
     }
 
-    // Safely update request data with validated value without reassigning the whole object
-    // This fixes "Cannot set property query of #<IncomingMessage> which has only a getter"
-    Object.keys(req[source]).forEach(key => delete req[source][key]);
-    Object.assign(req[source], value);
+    // Safely update request data with validated value
+    const target = req[source];
+    if (target) {
+        // Clear existing properties without reassigning the object itself
+        Object.keys(target).forEach(key => {
+            try {
+                delete target[key];
+            } catch (e) {
+                // Ignore if property is not deletable
+            }
+        });
+        // Assign new validated values
+        Object.assign(target, value);
+    }
 
     next();
 };

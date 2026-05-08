@@ -1,12 +1,10 @@
-import { stripeService } from "./stripe.service.js";
+import { stripeService, stripe } from "./stripe.service.js";
 import { AsyncHandler } from "../../utils/Asynchandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { ApiError } from "../../utils/ApiError.js";
 import Collaboration from "../collaboration/collaboration.model.js";
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+import { emitActivity } from "../../utils/activityUtils.js";
 
 /**
  * Brand: Fund the escrow for a collaboration
@@ -94,11 +92,29 @@ const submitDeliverable = AsyncHandler(async (req, res) => {
     }
 
     const deliverable = collaboration.deliverables.id(deliverableId);
+    if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
+    
+    // Safety check: Only IN_PROGRESS or REVISION_REQUESTED tasks can be submitted
+    if (deliverable.status !== "IN_PROGRESS" && deliverable.status !== "REVISION_REQUESTED") {
+        throw new ApiError(validationStatus.badRequest, `Only in-progress tasks can be submitted. Current status: ${deliverable.status}`);
+    }
+
     deliverable.status = "SUBMITTED";
     deliverable.submittedAt = new Date();
     deliverable.submissionFiles = submissionFiles || [];
     
     await collaboration.save();
+
+    // Notify brand about submission
+    await emitActivity({
+        user: collaboration.brand,
+        role: "brand",
+        type: "deliverable_submitted",
+        title: "Deliverable Submitted",
+        description: `The influencer has submitted work for: ${deliverable.title}`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
 
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, collaboration, "Deliverable submitted for review")
@@ -120,17 +136,21 @@ const approveDeliverable = AsyncHandler(async (req, res) => {
 
     const deliverable = collaboration.deliverables.id(deliverableId);
     
-    if (deliverable.status !== "SUBMITTED") {
-        throw new ApiError(validationStatus.badRequest, "Only submitted deliverables can be approved");
-    }
+    if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
 
-    // Mark as approved in model first
-    deliverable.status = "APPROVED";
-    deliverable.approvedAt = new Date();
-    await collaboration.save();
-
-    // Trigger Stripe Transfer
+    // Trigger Atomic Stripe Transfer and Status Update
     await stripeService.transferDeliverablePayout(collaboration._id, deliverableId);
+
+    // Notify influencer about approval (payment notification is handled in service)
+    await emitActivity({
+        user: collaboration.influencer,
+        role: "influencer",
+        type: "deliverable_approved",
+        title: "Deliverable Approved",
+        description: `Your work for "${deliverable.title}" was approved by the brand.`,
+        relatedId: collaboration._id,
+        category: "collaboration"
+    });
 
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, null, "Deliverable approved and payment released")
@@ -168,7 +188,13 @@ const createSetupIntent = AsyncHandler(async (req, res) => {
 
 const removePaymentMethod = AsyncHandler(async (req, res) => {
     const { id: paymentMethodId } = req.params;
-    await stripeService.detachPaymentMethod(paymentMethodId);
+
+    const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    if (pm.customer !== req.user.stripeCustomerId) {
+        throw new ApiError(403, "You don't own this payment method");
+    }
+
+    await stripeService.detachPaymentMethod(paymentMethodId, req.user._id);
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, null, "Payment method removed")
     );
@@ -206,6 +232,9 @@ const stripeWebhook = async (req, res) => {
         switch (event.type) {
             case "payment_intent.succeeded":
                 await stripeService.handlePaymentIntentSucceeded(event.data.object);
+                break;
+            case "account.updated":
+                await stripeService.handleAccountUpdated(event.data.object);
                 break;
             case "checkout.session.completed":
                 // Legacy support if needed, but we use PaymentIntents now

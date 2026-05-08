@@ -32,4 +32,8 @@ export const authValidation = {
     refreshSchema,
     forgotPasswordSchema,
     resetPasswordSchema,
+    changePasswordSchema: Joi.object({
+        oldPassword: Joi.string().required(),
+        newPassword: Joi.string().required().min(6),
+    }),
 };

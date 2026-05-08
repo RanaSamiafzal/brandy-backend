@@ -1,11 +1,19 @@
 # Brandly - AI-Based Brand Influencer Platform 🚀
 
-Brandly is a comprehensive platform designed to bridge the gap between brands and influencers. It leverages AI-driven insights to facilitate seamless collaborations, campaign management, and performance tracking.
+Brandly is a comprehensive platform designed to bridge the gap between brands and influencers. It leverages AI-driven insights to facilitate seamless collaborations, secure escrow payments, and real-time project management.
+
+### ✨ Key Features
+- **Mutual Agreement Flow**: Mandatory contract signing before project execution.
+- **Secure Escrow**: Automated budget protection and deliverable-based payouts via Stripe.
+- **Real-Time Dashboards**: Instant synchronization of tasks and project status.
+- **AI Matching**: Optimized pairing of brands with relevant influencers.
 
 ## 🛠️ Tech Stack
 
 - **Backend**: Node.js, Express.js
 - **Database**: MongoDB (Mongoose ODM)
+- **Real-Time**: Socket.io (Project-based Rooms)
+- **Payments**: Stripe (Escrow Protection)
 - **Authentication**: JWT, Passport.js (Google OAuth 2.0)
 - **File Storage**: Cloudinary
 - **Communication**: Nodemailer (SMTP for OTP)

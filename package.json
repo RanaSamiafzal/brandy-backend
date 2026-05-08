@@ -15,6 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "helmet": "^8.1.0",
     "stripe": "^22.1.0"
   }
 }

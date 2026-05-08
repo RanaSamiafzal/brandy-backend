@@ -9,8 +9,7 @@ const paymentSchema = new Schema({
         index: true
     },
     deliverable: {
-        type: Schema.Types.ObjectId,  // Reference to deliverable in collaboration
-        required: true
+        type: Schema.Types.ObjectId  // Reference to deliverable in collaboration
     },
     campaign: {
         type: Schema.Types.ObjectId,
@@ -146,9 +145,6 @@ const paymentSchema = new Schema({
     },
     
     // Timeline
-    createdAt: { type: Date, default: Date.now, index: true },
-    updatedAt: Date,
-    
     // Audit
     auditLog: [{
         action: String,
@@ -162,11 +158,10 @@ const paymentSchema = new Schema({
 }, { timestamps: true });
 
 // Indexes for fast queries
-paymentSchema.index({ collaboration: 1, deliverable: 1 }, { unique: true });
+paymentSchema.index({ collaboration: 1, deliverable: 1 }); // Removed unique constraint to allow refunds without deliverables
 paymentSchema.index({ brand: 1, status: 1 });
 paymentSchema.index({ influencer: 1, status: 1 });
 paymentSchema.index({ campaign: 1, status: 1 });
-paymentSchema.index({ createdAt: -1 });
 
 const Payment = mongoose.model('Payment', paymentSchema);
 export default Payment;

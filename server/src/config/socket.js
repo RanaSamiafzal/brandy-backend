@@ -1,5 +1,7 @@
 import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
 import User from "../modules/user/user.model.js";
+import { socketManager } from "./socketManager.js";
 
 const initializeSocket = (httpServer, app) => {
     const io = new Server(httpServer, {
@@ -17,20 +19,41 @@ const initializeSocket = (httpServer, app) => {
         pingTimeout: 60000,
         pingInterval: 25000,
         connectTimeout: 45000,
-        allowEIO3: true // Support for older clients if necessary
+        allowEIO3: true
     });
 
-    app.set('socketio', io);
+    socketManager.init(io);
+
+    // Socket.io Authentication Middleware
+    io.use((socket, next) => {
+        try {
+            // Check auth token or cookies
+            const token = socket.handshake.auth?.token || 
+                         socket.handshake.headers.cookie?.split('accessToken=')[1]?.split(';')[0];
+            
+            if (!token) {
+                return next(new Error("Authentication error: No token provided"));
+            }
+
+            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+            socket.userId = decoded._id;
+            next();
+        } catch (err) {
+            console.error("Socket Auth Error:", err.message);
+            next(new Error("Authentication error: Invalid token"));
+        }
+    });
 
     const onlineUsers = new Map(); // socketId -> userId
     const disconnectTimeouts = new Map(); // userId -> timeoutId
 
     io.on("connection", (socket) => {
-        console.log("Connected to socket.io", socket.id);
+        console.log("Connected to socket.io", socket.id, "User:", socket.userId);
 
-        socket.on("setup", async (userData) => {
-            if (!userData || !userData._id) return;
-            const userId = userData._id;
+        socket.on("setup", async () => {
+            const userId = socket.userId;
+            if (!userId) return;
+
             socket.join(userId);
             onlineUsers.set(socket.id, userId);
 
@@ -45,9 +68,9 @@ const initializeSocket = (httpServer, app) => {
                 const user = await User.findById(userId);
                 if (user && !user.manualOffline) {
                     await User.findByIdAndUpdate(userId, { status: "active", lastActive: new Date() });
-                    io.emit("user_status_changed", { userId, status: "active", lastActive: new Date() });
+                    socket.broadcast.emit("user_status_changed", { userId, status: "active", lastActive: new Date() });
                 } else if (user && user.manualOffline) {
-                    io.emit("user_status_changed", { userId, status: "offline", lastActive: user.lastActive });
+                    socket.broadcast.emit("user_status_changed", { userId, status: "offline", lastActive: user.lastActive });
                 }
             } catch (error) {
                 console.error("Error in socket setup:", error);
@@ -121,36 +144,35 @@ const initializeSocket = (httpServer, app) => {
         });
 
         socket.on("disconnect", async () => {
-            console.log("USER DISCONNECTED", socket.id);
+            console.log("SOCKET DISCONNECTED", socket.id);
             const userId = onlineUsers.get(socket.id);
 
             if (userId) {
                 onlineUsers.delete(socket.id);
 
-                // Check if user still has other active tabs
-                let hasOtherSockets = false;
+                // Count active sockets for this user
+                let activeSocketsCount = 0;
                 for (let [sId, uId] of onlineUsers.entries()) {
                     if (uId === userId) {
-                        hasOtherSockets = true;
-                        break;
+                        activeSocketsCount++;
                     }
                 }
 
-                if (!hasOtherSockets) {
-                    // Add a grace period
+                if (activeSocketsCount === 0) {
+                    // All tabs closed - Add a grace period
                     const timeoutId = setTimeout(async () => {
                         try {
                             const user = await User.findById(userId);
                             if (user) {
                                 const lastActiveTime = new Date();
                                 await User.findByIdAndUpdate(userId, { status: "offline", lastActive: lastActiveTime });
-                                io.emit("user_status_changed", { userId, status: "offline", lastActive: lastActiveTime });
+                                socket.broadcast.emit("user_status_changed", { userId, status: "offline", lastActive: lastActiveTime });
                             }
                         } catch (error) {
                             console.error("Error in socket disconnect timeout:", error);
                         }
                         disconnectTimeouts.delete(userId);
-                    }, 3000);
+                    }, 5000);
 
                     disconnectTimeouts.set(userId, timeoutId);
                 }

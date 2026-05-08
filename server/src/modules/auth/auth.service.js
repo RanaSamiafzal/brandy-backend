@@ -93,11 +93,19 @@ const register = async (userData) => {
  */
 const login = async (email, password) => {
     try {
-        console.log(`Login attempt for email: ${email}`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`Login attempt for email: ${email}`);
+        }
         const user = await User.findOne({ email });
         if (!user) {
-            console.log(`User not found: ${email}`);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`User not found: ${email}`);
+            }
             throw new ApiError(validationStatus.notFound, "User does not exist");
+        }
+
+        if (user.isBlocked) {
+            throw new ApiError(403, "Account has been blocked");
         }
 
         const isPasswordValid = await user.isPasswordCorrect(password);
@@ -113,11 +121,15 @@ const login = async (email, password) => {
             await user.save({ validateBeforeSave: false });
         }
 
-        console.log(`Generating tokens for user: ${user._id}`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`Generating tokens for user: ${user._id}`);
+        }
         const tokens = await generateAccessAndRefreshTokens(user._id);
         const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
-        console.log(`Login successful for user: ${email}`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`Login successful for user: ${email}`);
+        }
         return { user: loggedInUser, ...tokens };
     } catch (error) {
         console.error("Login Error:", error);
@@ -168,7 +180,9 @@ const forgotPassword = async (email) => {
     const otp = user.generatePasswordResetOTP();
     await user.save({ validateBeforeSave: false });
 
-    console.log(`\n\n=== DEVELOPMENT OTP FOR ${user.email}: ${otp} ===\n\n`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`\n\n=== DEVELOPMENT OTP FOR ${user.email}: ${otp} ===\n\n`);
+    }
 
     try {
         await sendEmail({
@@ -237,7 +251,9 @@ const sendEmailVerificationOTP = async (userId) => {
     const otp = user.generateEmailVerificationOTP();
     await user.save({ validateBeforeSave: false });
 
-    console.log(`\n\n=== EMAIL VERIFICATION OTP FOR ${user.email}: ${otp} ===\n\n`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`\n\n=== EMAIL VERIFICATION OTP FOR ${user.email}: ${otp} ===\n\n`);
+    }
 
     try {
         await sendEmail({

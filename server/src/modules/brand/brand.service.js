@@ -1,4 +1,5 @@
 import Brand from "./brand.model.js";
+import User from "../user/user.model.js";
 import Campaign from "../campaign/campaign.model.js";
 import Collaboration from "../collaboration/collaboration.model.js";
 import Payment from "../payment/payment.model.js";
@@ -452,6 +453,12 @@ const updateProfile = async (userId, updateData) => {
         delete updateData.socialMedia;
     }
 
+    // Sync profilePic/logo to User model
+    if (updateData.logo) {
+        await User.findByIdAndUpdate(userId, { profilePic: updateData.logo });
+        delete updateData.logo;
+    }
+
     const brand = await Brand.findOneAndUpdate(
         { user: userId },
         { $set: updateData },
@@ -643,7 +650,6 @@ const getPublicBrandList = async ({ search, industry, page = 1, limit = 12 }) =>
                 brandname: 1,
                 industry: 1,
                 description: 1,
-                logo: 1,
                 website: 1,
                 address: 1,
                 budgetRange: 1,

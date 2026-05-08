@@ -1,6 +1,6 @@
 # Brandly API Documentation 🚀
 
-> **Version 1.2.0** | Professional Brand-Influencer Integration Guide
+> **Version 1.3.0** | Professional Brand-Influencer Integration Guide
 
 ---
 
@@ -122,12 +122,26 @@ Campaign management for brands and discovery for influencers.
 | `/:id/reject`       | `PATCH`   | Influencer rejects request                       |
 | `/:id/cancel`       | `PATCH`   | Brand withdraws request                          |
 
-### Active Collaborations (`/collaborations`)
 - `GET /`: List active collaborations.
 - `GET /:id`: Full workspace details.
-- `PATCH /:id/cancel`: Terminate collaboration.
-- `PATCH /:id/complete`: Brand closes collaboration.
-- `GET /:id/progress`: Completion percentage stats.
+- `POST /:id/confirm-agreement`: Sign the collaboration contract (Both parties).
+- `POST /:id/fund-escrow`: Initialize Stripe escrow funding (Brand only).
+- `POST /:id/sync-escrow`: Manually trigger status sync with Stripe.
+- `POST /:id/request-action`: Request project `CANCEL` or `COMPLETE` (Mutual approval required).
+- `POST /:id/handle-action`: Approve or Reject a pending project action.
+- `GET /:id/progress`: Completion percentage & budget stats.
+
+---
+
+## ⚡ Real-Time Events (Socket.io)
+
+Clients should join the project room upon entering the dashboard: `socket.emit('join chat', collaborationId)`.
+
+| Event | Direction | Payload | Description |
+| :--- | :--- | :--- | :--- |
+| `activity_created` | Server -> Client | `{ type, category, relatedId }` | New notification/activity alert. |
+| `deliverable_updated`| Server -> Client | `{ collaborationId, deliverableId, status }` | Task board update (Silent). |
+| `collaboration_updated`| Server -> Client | `{ collaborationId, status }` | Project status/agreement update. |
 
 ---
 

@@ -5,6 +5,7 @@ import Collaboration from '../collaboration/collaboration.model.js';
 import User from '../user/user.model.js';
 import Payment from './payment.model.js';
 import mongoose from 'mongoose';
+import { socketManager } from '../../config/socketManager.js';
 import { sendNotification } from '../../utils/notificationUtils.js';
 import { emitActivity } from '../../utils/activityUtils.js';
 import Campaign from '../campaign/campaign.model.js';
@@ -76,6 +77,7 @@ export const syncEscrowStatus = async (collaborationId) => {
         if (paymentIntent.status === 'succeeded') {
             // Update collaboration to active/funded
             collaboration.escrowFunded = true;
+            collaboration.totalFundedAmount = collaboration.agreedBudget;
             collaboration.status = "active";
             
             await collaboration.save();
@@ -114,6 +116,10 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
 
     if (collaboration.status !== "awaiting_funds" && collaboration.status !== "active") {
         throw new ApiError(validationStatus.badRequest, `Collaboration is in ${collaboration.status} state, not awaiting_funds`);
+    }
+
+    if (!collaboration.brandAgreed || !collaboration.influencerAgreed) {
+        throw new ApiError(validationStatus.badRequest, "Agreement must be signed by both parties before funding escrow");
     }
 
     // Check if already funded
@@ -162,9 +168,17 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
     }
 
     // Budget validation for Stripe (minimum $0.50)
-    const amountCents = Math.round(collaboration.agreedBudget * 100);
+    // Only charge the DIFFERENCE between agreed and already funded
+    const amountToCharge = collaboration.agreedBudget - (collaboration.totalFundedAmount || 0);
+    const amountCents = Math.round(amountToCharge * 100);
     if (amountCents < 50) {
-        throw new ApiError(validationStatus.badRequest, `The project budget ($${collaboration.agreedBudget}) is below the minimum required for online payment ($0.50). Please update the collaboration budget first.`);
+        throw new ApiError(validationStatus.badRequest, `The additional funding amount ($${amountToCharge.toFixed(2)}) is below the minimum required for online payment ($0.50). Please update the collaboration budget first.`);
+    }
+
+    // Clear old PaymentIntent ID for re-funding scenarios
+    if (collaboration.stripePaymentIntentId) {
+        collaboration.stripePaymentIntentId = null;
+        await collaboration.save();
     }
 
     // Create a PaymentIntent with Idempotency Key
@@ -178,7 +192,8 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
             brandId: brandId.toString(),
             campaignId: collaboration.campaign._id.toString(),
             influencerId: collaboration.influencer.toString(),
-            type: 'escrow_funding'
+            type: 'escrow_funding',
+            fundingRound: `${(collaboration.totalFundedAmount || 0)}_to_${collaboration.agreedBudget}`
         },
     }, {
         idempotencyKey: `escrow_fund_${collaborationId}_${amountCents}`
@@ -212,8 +227,16 @@ export const handlePaymentIntentSucceeded = async (paymentIntent) => {
 
     if (collaboration.status === "awaiting_funds" || collaboration.status === "active") {
         collaboration.escrowFunded = true;
+        collaboration.totalFundedAmount = collaboration.agreedBudget;
         collaboration.stripePaymentIntentId = paymentIntent.id;
         collaboration.status = "active";
+
+        // Record in funding history
+        collaboration.fundingHistory.push({
+            amount: paymentIntent.amount / 100,
+            paymentIntentId: paymentIntent.id,
+            fundedAt: new Date()
+        });
 
         await collaboration.save();
 
@@ -262,6 +285,27 @@ export const handlePaymentIntentSucceeded = async (paymentIntent) => {
         });
 
         console.log(`✅ Escrow funded and notifications sent for collaboration ${collaborationId}`);
+
+        // Real-time sync for dashboard
+        const collabData = { collaborationId: collaboration._id, status: collaboration.status, escrowFunded: true };
+        socketManager.emitToUsers([collaboration.brand, collaboration.influencer], "collaboration_updated", collabData);
+        
+        // Also emit payment event
+        socketManager.emitToUsers([collaboration.brand, collaboration.influencer], "payment_received", { type: 'escrow_funded', amount: paymentIntent.amount / 100 });
+    }
+};
+
+/**
+ * Handles Webhook for Connect Account Updates
+ */
+export const handleAccountUpdated = async (account) => {
+    if (account.details_submitted) {
+        // Find user by stripeAccountId and mark onboarding as complete
+        await User.findOneAndUpdate(
+            { stripeAccountId: account.id },
+            { $set: { stripeOnboardingComplete: true } }
+        );
+        console.log(`✅ Onboarding complete for Stripe Account: ${account.id}`);
     }
 };
 
@@ -288,28 +332,38 @@ export const transferDeliverablePayout = async (collaborationId, deliverableId) 
         const deliverable = collaboration.deliverables.id(deliverableId);
         if (!deliverable) throw new ApiError(validationStatus.notFound, "Deliverable not found");
 
-        if (deliverable.status !== "APPROVED") {
-            throw new ApiError(validationStatus.badRequest, "Only approved deliverables can be paid");
+        if (deliverable.status !== "SUBMITTED" && deliverable.status !== "APPROVED") {
+            throw new ApiError(validationStatus.badRequest, "Only submitted or already approved deliverables can be paid");
+        }
+
+        // Atomically mark as approved if it was only submitted
+        if (deliverable.status === "SUBMITTED") {
+            deliverable.status = "APPROVED";
+            deliverable.approvedAt = new Date();
         }
 
         if (deliverable.paymentStatus === "paid") {
             throw new ApiError(validationStatus.badRequest, "Deliverable has already been paid");
         }
 
-        // Payout amount logic: release allocated budget OR remaining balance if final
-        let payoutAmountCents = 0;
-        if (deliverable.isFinal) {
-            // Release EVERYTHING remaining in escrow
-            const remainingBudget = Math.max(0, collaboration.agreedBudget - collaboration.totalPaidAmount);
-            payoutAmountCents = Math.floor(remainingBudget * 100);
-        } else {
-            // Release specifically the allocated budget for this task
-            payoutAmountCents = Math.floor(deliverable.allocatedBudget * 100);
+        // Payout amount logic: release allocated budget
+        // If this is the FINAL task, release the entire remaining escrow balance
+        let payoutAmountCents;
+        const remainingEscrow = Math.max(0, collaboration.agreedBudget - (collaboration.totalPaidAmount || 0));
 
+        if (deliverable.isFinal) {
+            payoutAmountCents = Math.round(remainingEscrow * 100);
+        } else {
+            payoutAmountCents = Math.round(deliverable.allocatedBudget * 100);
+            
             // Safety guard: ensure we don't accidentally overpay beyond agreed budget
-            const potentialTotal = (collaboration.totalPaidAmount || 0) + (payoutAmountCents / 100);
-            if (potentialTotal > collaboration.agreedBudget) {
-                throw new ApiError(validationStatus.badRequest, `Payout exceeds total collaboration budget! Only $${collaboration.agreedBudget - collaboration.totalPaidAmount} remains in escrow.`);
+            if ((payoutAmountCents / 100) > remainingEscrow) {
+                // Adjust to remaining escrow if it's a rounding issue (e.g., 1 cent off)
+                if (Math.abs((payoutAmountCents / 100) - remainingEscrow) <= 0.01) {
+                    payoutAmountCents = Math.round(remainingEscrow * 100);
+                } else {
+                    throw new ApiError(validationStatus.badRequest, `Payout ($${deliverable.allocatedBudget}) exceeds remaining escrow budget ($${remainingEscrow.toFixed(2)}).`);
+                }
             }
         }
 
@@ -317,8 +371,8 @@ export const transferDeliverablePayout = async (collaborationId, deliverableId) 
             throw new ApiError(validationStatus.badRequest, "No funds remaining to release for this task");
         }
 
-        // Idempotency Key prevents duplicate transfers
-        const idempotencyKey = `transfer_${collaborationId}_${deliverableId}`;
+        // Idempotency Key prevents duplicate transfers - Specific to deliverable
+        const idempotencyKey = `deliverable_payout_${deliverableId}`;
 
         const transfer = await stripe.transfers.create({
             amount: payoutAmountCents,
@@ -374,13 +428,29 @@ export const transferDeliverablePayout = async (collaborationId, deliverableId) 
         });
 
         // Notify Influencer
-        sendNotification({
+        await sendNotification({
             user: collaboration.influencer,
             type: "payout_released",
             title: "Payment Received",
             message: `You have received a payment of $${(payoutAmountCents / 100).toFixed(2)} for task: ${deliverable.title}`,
             relatedId: collaboration._id
         });
+
+        await emitActivity({
+            user: collaboration.influencer,
+            role: 'influencer',
+            type: 'payout_released',
+            title: 'Payment Received',
+            description: `A payout of $${(payoutAmountCents / 100).toFixed(2)} was sent to your Stripe account.`,
+            relatedId: collaboration._id,
+            category: 'collaboration'
+        });
+
+        // Real-time sync
+        const delivData = { collaborationId: collaboration._id, deliverableId, status: "APPROVED", paymentStatus: "paid" };
+        socketManager.emitToUsers([collaboration.brand, collaboration.influencer], "deliverable_updated", delivData);
+        
+        socketManager.emitToUsers([collaboration.brand, collaboration.influencer], "payment_released", { collaborationId, deliverableId, amount: payoutAmountCents / 100 });
 
         return transfer;
     } catch (error) {
@@ -426,7 +496,15 @@ export const createSetupIntent = async (userId) => {
     return setupIntent;
 };
 
-export const detachPaymentMethod = async (paymentMethodId) => {
+export const detachPaymentMethod = async (paymentMethodId, userId) => {
+    const user = await User.findById(userId);
+    if (!user?.stripeCustomerId) throw new ApiError(validationStatus.notFound, "Customer not found");
+
+    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+    if (paymentMethod.customer !== user.stripeCustomerId) {
+        throw new ApiError(validationStatus.forbidden, "Access denied: You do not own this payment method");
+    }
+
     return await stripe.paymentMethods.detach(paymentMethodId);
 };
 
@@ -446,40 +524,85 @@ export const getPaymentHistory = async (userId, role) => {
  */
 export const refundCollaborationBalance = async (collaborationId) => {
     const collaboration = await Collaboration.findById(collaborationId);
-    if (!collaboration || !collaboration.stripePaymentIntentId) {
-        throw new ApiError(validationStatus.badRequest, "No payment found to refund");
+    if (!collaboration) {
+        throw new ApiError(validationStatus.notFound, "Collaboration not found");
     }
 
-    if (!collaboration.escrowFunded) return;
+    if (!collaboration.escrowFunded) return { refundedAmount: 0, message: "Escrow not funded" };
 
-    const remainingAmount = collaboration.agreedBudget - collaboration.totalPaidAmount;
-    if (remainingAmount <= 0) return;
+    const remainingAmount = Math.max(0, collaboration.agreedBudget - collaboration.totalPaidAmount);
+    if (remainingAmount <= 0) return { refundedAmount: 0, message: "No balance to refund" };
 
-    const amountCents = Math.round(remainingAmount * 100);
+    console.log(`🔄 Initiating Waterfall Refund for $${remainingAmount} (Collab: ${collaborationId})`);
+    
+    let amountLeftToRefund = remainingAmount;
+    let totalRefunded = 0;
+    const refundsIssued = [];
 
-    const refund = await stripe.refunds.create({
-        payment_intent: collaboration.stripePaymentIntentId,
-        amount: amountCents,
-        reason: 'requested_by_customer',
-        metadata: {
-            collaborationId: collaborationId.toString(),
-            type: 'collaboration_cancellation_refund'
+    // Sort funding history by newest first to refund the most recent money first
+    const sortedHistory = [...collaboration.fundingHistory].sort((a, b) => b.fundedAt - a.fundedAt);
+
+    for (const payment of sortedHistory) {
+        if (amountLeftToRefund <= 0) break;
+
+        try {
+            // Check how much of THIS specific PI is already refunded
+            const existingRefunds = await stripe.refunds.list({ payment_intent: payment.paymentIntentId });
+            const alreadyRefundedOnThisPI = existingRefunds.data.reduce((sum, r) => sum + r.amount, 0) / 100;
+            const availableToRefundOnThisPI = payment.amount - alreadyRefundedOnThisPI;
+
+            if (availableToRefundOnThisPI <= 0) continue;
+
+            const refundAmount = Math.min(amountLeftToRefund, availableToRefundOnThisPI);
+            const amountCents = Math.round(refundAmount * 100);
+
+            if (amountCents < 50) continue; // Stripe minimum refund is usually $0.50 for some accounts, or just avoid tiny dust
+
+            const refund = await stripe.refunds.create({
+                payment_intent: payment.paymentIntentId,
+                amount: amountCents,
+                reason: 'requested_by_customer',
+                metadata: {
+                    collaborationId: collaborationId.toString(),
+                    type: 'waterfall_refund'
+                }
+            });
+
+            collaboration.refundHistory.push({
+                amount: refundAmount,
+                refundId: refund.id,
+                createdAt: new Date()
+            });
+
+            refundsIssued.push(refund.id);
+            totalRefunded += refundAmount;
+            amountLeftToRefund -= refundAmount;
+
+            // Create Payment record for history
+            await Payment.create({
+                collaboration: collaborationId,
+                brand: collaboration.brand,
+                influencer: collaboration.influencer,
+                campaign: collaboration.campaign,
+                amount: refundAmount,
+                netAmount: refundAmount,
+                currency: collaboration.currency,
+                status: 'refunded',
+                stripeTransferId: refund.id,
+                description: `Waterfall refund of remaining balance ($${refundAmount.toFixed(2)})`
+            });
+
+        } catch (err) {
+            console.error(`❌ Refund failed for PI ${payment.paymentIntentId}:`, err.message);
         }
-    });
+    }
 
-    // Update payment record or log it
-    await Payment.create({
-        collaboration: collaborationId,
-        brand: collaboration.brand,
-        influencer: collaboration.influencer,
-        amount: remainingAmount,
-        currency: collaboration.currency,
-        status: 'refunded',
-        stripeTransferId: refund.id,
-        description: `Refund of remaining escrow balance for cancelled/completed project.`
-    });
-
-    return refund;
+    await collaboration.save();
+    return { 
+        refundedAmount: Math.round(totalRefunded * 100) / 100, 
+        refundsIssued,
+        remainingUnprocessed: Math.round(amountLeftToRefund * 100) / 100
+    };
 };
 
 export const stripeService = {
@@ -487,6 +610,7 @@ export const stripeService = {
     createAccountLink,
     createEscrowPaymentIntent,
     handlePaymentIntentSucceeded,
+    handleAccountUpdated,
     syncEscrowStatus,
     transferDeliverablePayout,
     refundCollaborationBalance,
