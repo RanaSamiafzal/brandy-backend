@@ -6,25 +6,23 @@ import crypto from 'crypto';
 import { sendEmail } from "../../utils/email.js";
 import Brand from "../brand/brand.model.js";
 import Influencer from "../influencer/influencer.model.js";
+import logger from "../../utils/logger.js";
 
 /**
  * Generate Access and Refresh Tokens
  */
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
-        console.log(`Finding user ${userId} for token generation`);
+        logger.debug(`Finding user ${userId} for token generation`);
         const user = await User.findById(userId);
         if (!user) throw new ApiError(validationStatus.notFound, "User not found");
 
-        console.log(`Generating access token for ${user.email}`);
+        logger.debug(`Generating access token for ${user.email}`);
         const accessToken = user.generateAccessToken();
-        console.log(`Generating refresh token for ${user.email}`);
+        logger.debug(`Generating refresh token for ${user.email}`);
         const refreshToken = user.generateRefreshToken();
 
-        // Use a targeted update instead of user.save() to avoid Mongoose casting
-        // the 'platforms' field on documents that don't have it yet, which causes
-        // the MongoDB error: "Cannot create field 'youtube' in element {platforms: []}"
-        console.log(`Saving refresh token to database for ${user.email}`);
+        logger.debug(`Saving refresh token to database for ${user.email}`);
         await User.findByIdAndUpdate(
             userId,
             { $set: { refreshToken } },
@@ -93,14 +91,10 @@ const register = async (userData) => {
  */
 const login = async (email, password) => {
     try {
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`Login attempt for email: ${email}`);
-        }
+        logger.debug(`Login attempt for email: ${email}`);
         const user = await User.findOne({ email });
         if (!user) {
-            if (process.env.NODE_ENV !== 'production') {
-                console.log(`User not found: ${email}`);
-            }
+            logger.debug(`User not found: ${email}`);
             throw new ApiError(validationStatus.notFound, "User does not exist");
         }
 
@@ -110,26 +104,22 @@ const login = async (email, password) => {
 
         const isPasswordValid = await user.isPasswordCorrect(password);
         if (!isPasswordValid) {
-            console.log(`Invalid password for user: ${email}`);
+            logger.warn(`Invalid password for user: ${email}`);
             throw new ApiError(validationStatus.unauthorized, "Invalid credentials");
         }
 
         // Auto-reactivate if account was deactivated
         if (user.isDeactivated) {
-            console.log(`Reactivating account for: ${email}`);
+            logger.info(`Reactivating account for: ${email}`);
             user.isDeactivated = false;
             await user.save({ validateBeforeSave: false });
         }
 
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`Generating tokens for user: ${user._id}`);
-        }
+        logger.debug(`Generating tokens for user: ${user._id}`);
         const tokens = await generateAccessAndRefreshTokens(user._id);
         const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`Login successful for user: ${email}`);
-        }
+        logger.info(`Login successful for user: ${email}`);
         return { user: loggedInUser, ...tokens };
     } catch (error) {
         console.error("Login Error:", error);

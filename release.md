@@ -115,22 +115,38 @@ The following chart illustrates the development lifecycle of Brandly over a 16-w
 
 ```mermaid
 gantt
-    title Brandly Development Timeline
+    title Brandly Project: Professional Development Timeline
     dateFormat  YYYY-MM-DD
-    section Research & Analysis
-    Literature Review       :a1, 2026-01-01, 14d
-    Requirement Gathering   :a2, after a1, 14d
-    section System Design
-    UML Modeling            :b1, 2026-02-01, 14d
-    Database Architecture   :b2, after b1, 7d
-    section Implementation
-    Auth & User Identity    :c1, 2026-02-22, 14d
-    Campaign Engine         :c2, after c1, 14d
-    Collab & Sockets        :c3, after c2, 21d
-    Stripe Integration      :c4, after c3, 14d
-    section Quality Assurance
-    Unit & Integration Test :d1, 2026-05-01, 14d
-    Final Polish & UI Fixes :d2, after d1, 7d
+    axisFormat  %b %d
+    
+    section Phase 1: Foundation
+    Research & Project Setup       :active, a1, 2026-01-01, 20d
+    Database & System Architecture :a2, after a1, 15d
+    Requirement Specification (SRS):milestone, m1, 2026-02-05, 0d
+
+    section Phase 2: Identity & Access
+    Authentication Module (JWT)    :b1, 2026-02-06, 12d
+    OAuth & User Management        :b2, after b1, 10d
+    Profile Setup (Brand/Influencer):b3, after b2, 8d
+
+    section Phase 3: Campaign Engine
+    Campaign Creation Workflow     :c1, 2026-03-08, 14d
+    AI-Based Matchmaking (aiMatch) :c2, after c1, 12d
+
+    section Phase 4: Communication
+    Collaboration Workspace        :d1, 2026-04-05, 14d
+    Real-Time Chat System (Message):d2, after d1, 10d
+    In-App Notifications           :d3, after d2, 7d
+    Communication System Ready     :milestone, m2, 2026-05-05, 0d
+
+    section Phase 5: Financials
+    Stripe Payment Integration     :e1, 2026-05-06, 14d
+    Escrow & Payout Pipelining     :e2, after e1, 10d
+
+    section Phase 6: Finalization
+    Activity Tracking & Logging    :f1, 2026-05-30, 7d
+    Quality Assurance & Testing    :f2, after f1, 14d
+    Final FYP Submission           :milestone, m3, 2026-06-25, 0d
 ```
 
 ---
@@ -648,7 +664,26 @@ The testing phase ensures the robustness of the platform's security logic and it
 - **Environment**: Chrome 124, Node.js 22, MongoDB Atlas.
 - **Features Tested**: Authentication, Campaign posting, Agreement signing, Escrow funding, Task submission, Real-time sync.
 
-## 6.5 Test Cases
+## 6.5 Testing Workflow Diagram
+The following diagram illustrates the iterative testing and bug-fixing lifecycle applied during the Brandly development process.
+
+```mermaid
+graph TD
+    A[Unit Testing] --> B[Integration Testing]
+    B --> C[User Acceptance Testing]
+    C --> D{Pass?}
+    D -- Yes --> E[Final Documentation]
+    D -- No --> F[Bug Fixing]
+    F --> A
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style C fill:#bfb,stroke:#333,stroke-width:2px
+    style E fill:#dfd,stroke:#333,stroke-width:4px
+    style F fill:#fbb,stroke:#333,stroke-width:2px
+```
+
+## 6.6 Test Cases
 
 | ID | Scenario | Input | Expected Result | Actual Result | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |

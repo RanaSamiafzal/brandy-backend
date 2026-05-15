@@ -249,6 +249,8 @@ UserSchema.methods.generateEmailVerificationOTP = function () {
 };
 
 UserSchema.index({ role: 1 });
+UserSchema.index({ isBlocked: 1 });
+UserSchema.index({ isVerified: 1, createdAt: 1 });
 UserSchema.index({ _id: 1, "verifiedPlatforms.platform": 1 });
 UserSchema.index({ "verifiedPlatforms.platform": 1, "verifiedPlatforms.platformUserId": 1 }, { 
     unique: true, 

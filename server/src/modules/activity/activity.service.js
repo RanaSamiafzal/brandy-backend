@@ -41,7 +41,7 @@ const markAsRead = async (activityId, userId) => {
         { _id: activityId, user: userId },
         { isRead: true },
         { new: true }
-    );
+    ).lean();
     if (!activity) throw new ApiError(validationStatus.notFound, "Activity not found");
     return activity;
 };

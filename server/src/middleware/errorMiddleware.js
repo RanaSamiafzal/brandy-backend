@@ -1,4 +1,5 @@
 import { ApiError } from "../utils/ApiError.js";
+import logger from "../utils/logger.js";
 
 /**
  * Global Error Handling Middleware
@@ -12,8 +13,12 @@ const errorMiddleware = (err, req, res, next) => {
         message = err.message || "Internal Server Error";
     }
 
-    // Log the error for debugging
-    console.error("API ERROR:", err);
+    // Use centralized logger for production-safe error tracking
+    logger.error(`API Error: ${message}`, err, { 
+        url: req.url, 
+        method: req.method,
+        statusCode 
+    });
 
     const response = {
         success: false,

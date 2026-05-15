@@ -129,20 +129,31 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
 
     // --- REUSE LOGIC ---
     // If we already have a PaymentIntent ID, check its status on Stripe
+    // IMPORTANT: Only reuse if the amount matches!
+    const amountToCharge = collaboration.agreedBudget - (collaboration.totalFundedAmount || 0);
+    const amountCents = Math.round(amountToCharge * 100);
+
     if (collaboration.stripePaymentIntentId) {
         const syncResult = await syncEscrowStatus(collaborationId);
+        
         if (syncResult.alreadyFunded) {
             return {
                 alreadyFunded: true,
                 message: "This project has already been funded."
             };
         }
-        
-        if (syncResult.clientSecret) {
-            return {
-                clientSecret: syncResult.clientSecret,
-                paymentIntentId: syncResult.paymentIntentId
-            };
+
+        // If we have a PaymentIntent, retrieve it to check the amount
+        try {
+            const existingIntent = await stripe.paymentIntents.retrieve(collaboration.stripePaymentIntentId);
+            if (existingIntent.amount === amountCents && !['succeeded', 'canceled'].includes(existingIntent.status)) {
+                return {
+                    clientSecret: existingIntent.client_secret,
+                    paymentIntentId: existingIntent.id
+                };
+            }
+        } catch (err) {
+            console.warn("Failed to retrieve existing PaymentIntent, will create new one:", err.message);
         }
     }
 
@@ -169,16 +180,14 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
 
     // Budget validation for Stripe (minimum $0.50)
     // Only charge the DIFFERENCE between agreed and already funded
-    const amountToCharge = collaboration.agreedBudget - (collaboration.totalFundedAmount || 0);
-    const amountCents = Math.round(amountToCharge * 100);
     if (amountCents < 50) {
         throw new ApiError(validationStatus.badRequest, `The additional funding amount ($${amountToCharge.toFixed(2)}) is below the minimum required for online payment ($0.50). Please update the collaboration budget first.`);
     }
 
-    // Clear old PaymentIntent ID for re-funding scenarios
+    // Clear old PaymentIntent ID if it's no longer valid (different amount or status)
     if (collaboration.stripePaymentIntentId) {
         collaboration.stripePaymentIntentId = null;
-        await collaboration.save();
+        // Don't save yet, we'll save with the new ID below
     }
 
     // Create a PaymentIntent with Idempotency Key
@@ -368,7 +377,17 @@ export const transferDeliverablePayout = async (collaborationId, deliverableId) 
         }
 
         if (payoutAmountCents <= 0) {
-            throw new ApiError(validationStatus.badRequest, "No funds remaining to release for this task");
+            // If this is a zero-sum final task (all money already paid), just mark it as paid and return
+            console.log(`ℹ️ Zero-sum payout for deliverable ${deliverableId}. Marking as paid without Stripe call.`);
+            deliverable.paymentStatus = "paid";
+            deliverable.approvedAt = new Date();
+            await collaboration.save({ session });
+            await session.commitTransaction();
+            
+            const delivData = { collaborationId: collaboration._id, deliverableId, status: "APPROVED", paymentStatus: "paid" };
+            socketManager.emitToUsers([collaboration.brand, collaboration.influencer], "deliverable_updated", delivData);
+            
+            return { message: "Zero-sum payout completed" };
         }
 
         // Idempotency Key prevents duplicate transfers - Specific to deliverable

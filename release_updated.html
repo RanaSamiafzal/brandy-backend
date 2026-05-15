@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>FYP Documentation</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      white-space: pre-wrap;
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">FYP Documentation</h1>
+</header>
+<h1 id="final-year-project-documentation">Final Year Project
+Documentation</h1>
+<h1
+id="project-title-brandly---ai-based-brand-influencer-platform"><strong>Project
+Title: Brandly - AI-Based Brand Influencer Platform</strong></h1>
+<p><strong>Date:</strong> May 2026 <strong>Course:</strong> Bachelor of
+Computer Science <strong>Subject:</strong> Final Year Project (FYP)</p>
+<hr />
+<h1 id="table-of-contents">Table of Contents</h1>
+<ol type="1">
+<li><a href="#chapter-1-gathering--analyzing-information">CHAPTER 1:
+Gathering &amp; Analyzing Information</a>
+<ul>
+<li>1.1 Introduction</li>
+<li>1.2 Problem Statement</li>
+<li>1.3 Aim &amp; Objectives</li>
+<li>1.4 Scope</li>
+<li>1.5 Methodology</li>
+<li>1.6 Definitions, Acronyms and Abbreviations</li>
+<li>1.7 Project Timeline (Gantt Chart)</li>
+</ul></li>
+<li><a href="#chapter-2-software-requirement-specification">CHAPTER 2:
+Software Requirement Specification</a>
+<ul>
+<li>2.1 Literature Review</li>
+<li>2.2 Stakeholders List</li>
+<li>2.3 Domain Requirements</li>
+<li>2.4 Functional Requirements</li>
+<li>2.5 Non-Functional Requirements</li>
+<li>2.6 Feasibility Study</li>
+<li>2.7 Risk Management</li>
+<li>2.8 Domain Knowledge</li>
+</ul></li>
+<li><a href="#chapter-3-analysis">CHAPTER 3: Analysis</a>
+<ul>
+<li>3.1 Introduction</li>
+<li>3.2 System Requirements</li>
+<li>3.3 Use Case Specifications</li>
+<li>3.4 Use Case Diagrams</li>
+<li>3.5 Data Flow Diagram (Level 0 and 1)</li>
+</ul></li>
+<li><a href="#chapter-4-design">CHAPTER 4: Design</a>
+<ul>
+<li>4.1 Introduction</li>
+<li>4.2 Software Architecture Diagram</li>
+<li>4.3 Class Diagram</li>
+<li>4.4 Database Diagram (ERD)</li>
+<li>4.5 Sequence Diagram</li>
+<li>4.6 Activity Diagram</li>
+<li>4.7 Component &amp; Deployment Diagrams</li>
+<li>4.8 Data Dictionary</li>
+<li>4.9 System Security Architecture</li>
+</ul></li>
+<li><a href="#chapter-5-graphical-user-interfaces">CHAPTER 5: Graphical
+User Interfaces</a>
+<ul>
+<li>5.1 Interface Structure</li>
+<li>5.2 Navigation &amp; Workflow</li>
+<li>5.3 Form Design &amp; Validation</li>
+<li>5.4 Role-Based Interfaces</li>
+</ul></li>
+<li><a href="#chapter-6-testing">CHAPTER 6: Testing</a>
+<ul>
+<li>6.1 Introduction</li>
+<li>6.2 Testing Strategy</li>
+<li>6.3 Types of Testing Performed</li>
+<li>6.4 Test Plan</li>
+<li>6.5 Test Cases (TC-01 to TC-50)</li>
+<li>6.6 Test Results &amp; Analysis</li>
+</ul></li>
+<li><a href="#chapter-7-conclusion-and-future-work">CHAPTER 7:
+Conclusion and Future Work</a>
+<ul>
+<li>7.1 Summary of Findings</li>
+<li>7.2 Challenges &amp; Limitations</li>
+<li>7.3 Future Work</li>
+<li>7.4 Conclusion</li>
+</ul></li>
+</ol>
+<hr />
+<h1 id="chapter-1-gathering-analyzing-information">CHAPTER 1: Gathering
+&amp; Analyzing Information</h1>
+<h2 id="introduction">1.1 Introduction</h2>
+<p>In the contemporary digital era, the landscape of marketing has
+undergone a paradigm shift. Traditional advertising mediums are
+increasingly being overshadowed by <strong>Influencer
+Marketing</strong>, a multi-billion dollar industry where brands
+collaborate with social media creators to reach targeted audiences.
+However, as the industry scales, so do its complexities.</p>
+<p><strong>Brandly</strong> is an AI-powered platform designed to
+professionalize and secure these interactions. It serves as a unified
+workspace where brands can discover influencers, manage high-volume
+campaigns, and execute collaborations with real-time synchronization and
+secure escrow payment protections.</p>
+<h2 id="problem-statement">1.2 Problem Statement</h2>
+<p>Despite the growth of influencer marketing, the sector faces several
+critical “friction points” that hinder productivity and trust: 1.
+<strong>Lack of Real-Time Sync</strong>: Both brands and influencers
+often suffer from communication gaps. Deliverable statuses are
+frequently tracked in spreadsheets or fragmented chat apps, leading to
+manual refresh cycles and outdated project states. 2. <strong>Payment
+Insecurity</strong>: Influencers fear non-payment after work completion,
+while brands fear poor-quality work or ghosting after upfront payments.
+3. <strong>Inconsistent Workflows</strong>: There is no standard
+“contractual” process. Projects often start without clear agreement on
+terms, leading to disputes over revisions and deadlines. 4.
+<strong>Information Overload</strong>: Scaling a brand from 5 to 50
+influencers is impossible without an automated system to manage
+discovery, tracking, and payouts.</p>
+<h2 id="aim-objectives">1.3 Aim &amp; Objectives</h2>
+<p>The primary aim of <strong>Brandly</strong> is to provide a secure,
+real-time, and AI-driven ecosystem for professional influencer
+marketing.</p>
+<h3 id="primary-objectives">Primary Objectives:</h3>
+<ol type="1">
+<li><strong>Develop a Secure Escrow System</strong>: Implement a
+Stripe-based financial gateway that holds funds until deliverables are
+approved, ensuring safety for both parties.</li>
+<li><strong>Implement Real-Time Synchronization</strong>: Utilize
+WebSockets (Socket.io) to ensure that task status changes and agreement
+signatures are reflected instantly across all dashboards.</li>
+<li><strong>Enforce Mutual Agreements</strong>: Create a digital
+contract workflow where project actions are gated by mutual
+signatures.</li>
+<li><strong>Optimize Professional Workflows</strong>: Provide a
+Kanban-style deliverable management system that categorizes work into
+“In Progress,” “Review,” and “Approved” states.</li>
+</ol>
+<h2 id="scope">1.4 Scope</h2>
+<p>The project encompasses the following domains: - <strong>Web
+Application</strong>: A full-stack responsive web platform. -
+<strong>Role-Based Access</strong>: Specialized dashboards for Brands,
+Influencers, and Administrators. - <strong>Campaign Management</strong>:
+Tools for brands to create briefs and for influencers to discover
+opportunities. - <strong>Collaboration Workspace</strong>: A shared
+project area for managing tasks, signatures, and payments. -
+<strong>Exclusions</strong>: The current version does not include a
+native mobile app (iOS/Android) but is optimized for mobile
+browsers.</p>
+<h2 id="methodology">1.5 Methodology</h2>
+<p>The project follows the <strong>Agile Development
+Methodology</strong>. This approach was chosen to allow for iterative
+improvements, particularly in the complex areas of payment integration
+and real-time socket management. - <strong>Sprint 1</strong>: Backend
+architecture and User Identity (Auth). - <strong>Sprint 2</strong>:
+Campaign creation and discovery logic. - <strong>Sprint 3</strong>:
+Collaboration lifecycle and Agreement workflow. - <strong>Sprint
+4</strong>: Stripe Escrow and Socket.io synchronization. -
+<strong>Sprint 5</strong>: Testing, Cleanup, and Documentation.</p>
+<h2 id="definitions-acronyms-and-abbreviations">1.6 Definitions,
+Acronyms and Abbreviations</h2>
+<ul>
+<li><strong>FYP</strong>: Final Year Project</li>
+<li><strong>API</strong>: Application Programming Interface</li>
+<li><strong>JWT</strong>: JSON Web Token (Used for authentication)</li>
+<li><strong>ERD</strong>: Entity Relationship Diagram</li>
+<li><strong>Escrow</strong>: A financial arrangement where a third party
+(Brandly) holds funds until conditions are met.</li>
+<li><strong>Deliverable</strong>: A specific piece of content (Post,
+Story, Video) promised by an influencer.</li>
+<li><strong>Socket.io</strong>: A library that enables real-time,
+bi-directional communication between web clients and servers.</li>
+</ul>
+<h2 id="project-timeline-gantt-chart">1.7 Project Timeline (Gantt
+Chart)</h2>
+<p>The following chart illustrates the development lifecycle of Brandly
+over a 16-week academic period.</p>
+<pre class="mermaid"><code>gantt
+    title Brandly Development Timeline
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %d
+    section Research &amp; Analysis
+    Literature Review       :a1, 2026-01-01, 14d
+    Requirement Gathering   :a2, after a1, 14d
+    section System Design
+    UML Modeling            :b1, 2026-02-01, 14d
+    Database Architecture   :b2, after b1, 7d
+    section Implementation
+    Auth &amp; User Identity    :c1, 2026-02-22, 14d
+    Campaign Engine         :c2, after c1, 14d
+    Collab &amp; Sockets        :c3, after c2, 21d
+    Stripe Integration      :c4, after c3, 14d
+    section Quality Assurance
+    Unit &amp; Integration Test :d1, 2026-05-01, 14d
+    Final Polish &amp; UI Fixes :d2, after d1, 7d</code></pre>
+<hr />
+<h1 id="chapter-2-software-requirement-specification">CHAPTER 2:
+Software Requirement Specification</h1>
+<h2 id="literature-review">2.1 Literature Review</h2>
+<p>A comparative analysis was performed against industry leaders such as
+<strong>Upfluence</strong> and <strong>AspireIQ</strong>. -
+<strong>Upfluence</strong>: Strong in discovery but lacks a unified
+real-time collaboration workspace for small-to-medium enterprises. -
+<strong>AspireIQ</strong>: Highly professional but often
+cost-prohibitive for independent creators and startups. -
+<strong>Brandly Gap</strong>: Brandly fills the gap by providing
+enterprise-level security (Escrow) and real-time sync at a scale
+accessible to independent creators and growing brands.</p>
+<h2 id="stakeholders-list">2.2 Stakeholders List</h2>
+<ol type="1">
+<li><strong>The Brand</strong>: Organizations seeking to market
+products. They fund campaigns and approve deliverables.</li>
+<li><strong>The Influencer</strong>: Content creators who execute the
+marketing tasks.</li>
+<li><strong>AI Agent (System-level)</strong>: Future-state automated
+moderator responsible for project integrity and automated dispute
+resolution.</li>
+</ol>
+<h2 id="domain-requirements">2.3 Domain Requirements</h2>
+<ul>
+<li><strong>Data Integrity</strong>: Financial records and user profiles
+must be immutable and securely stored.</li>
+<li><strong>Low Latency</strong>: Real-time project updates should occur
+within &lt;200ms.</li>
+<li><strong>Scalability</strong>: The backend must handle concurrent
+socket connections for thousands of active collaborations.</li>
+</ul>
+<h2 id="functional-requirements-fr">2.4 Functional Requirements
+(FR)</h2>
+<ul>
+<li><strong>FR-01: Authentication</strong>: Users must be able to
+Register, Login, and Reset Passwords via HttpOnly cookies.</li>
+<li><strong>FR-02: Profile Management</strong>: Role-specific profile
+settings (Niche for influencers, Logo for brands).</li>
+<li><strong>FR-03: Campaign Creation</strong>: Brands must be able to
+post detailed campaign briefs.</li>
+<li><strong>FR-04: Agreement Signing</strong>: Both parties must
+digitally sign a “Standard Collaboration Contract” before the project
+starts.</li>
+<li><strong>FR-05: Escrow Funding</strong>: Brands must fund the project
+budget into a secure holding state via Stripe.</li>
+<li><strong>FR-06: Task Management</strong>: Creation and tracking of
+specific deliverables (e.g., “1 Instagram Story”).</li>
+<li><strong>FR-07: Real-Time Sync</strong>: Instant UI updates for task
+submissions and approvals.</li>
+</ul>
+<h2 id="non-functional-requirements-nfr">2.5 Non-Functional Requirements
+(NFR)</h2>
+<ul>
+<li><strong>NFR-01: Security</strong>: All financial and personal data
+must be encrypted; sessions must be secured via JWT.</li>
+<li><strong>NFR-02: Reliability</strong>: 99.9% uptime for the socket
+server to prevent project state mismatch.</li>
+<li><strong>NFR-03: Usability</strong>: A clean, modern interface with a
+0-learning curve for influencers.</li>
+<li><strong>NFR-04: Portability</strong>: Optimized for all modern
+evergreen browsers (Chrome, Safari, Firefox).</li>
+</ul>
+<h2 id="feasibility-study">2.6 Feasibility Study</h2>
+<p>Before proceeding with development, a comprehensive feasibility study
+was conducted to ensure the project’s viability across multiple
+dimensions.</p>
+<h3 id="technical-feasibility">2.6.1 Technical Feasibility</h3>
+<p>The platform utilizes the MERN stack (MongoDB, Express, React,
+Node.js), which is highly scalable and well-supported by the developer
+community. The integration of Socket.io for real-time synchronization
+and Stripe for secure escrow payments is technically achievable using
+established APIs. The development team has the necessary expertise in
+JavaScript and RESTful architectures to implement the proposed
+features.</p>
+<h3 id="economic-feasibility">2.6.2 Economic Feasibility</h3>
+<p>The development of Brandly as a Final Year Project involves zero
+capital expenditure on software, as open-source tools (VS Code, Git,
+Node.js) are utilized. Operational costs for cloud hosting (MongoDB
+Atlas, Vercel, Render) are covered by free-tier plans for the initial
+prototype. From a commercial perspective, the platform has high
+potential for revenue generation through transaction commissions and
+subscription models.</p>
+<h3 id="operational-feasibility">2.6.3 Operational Feasibility</h3>
+<p>Brandly is designed with an intuitive, minimalist interface that
+requires minimal training for end-users (brands and influencers). The
+automated workflows for agreement signing and payment escrow
+significantly reduce the administrative burden compared to manual
+influencer marketing management, making the system highly desirable for
+the target audience.</p>
+<h2 id="risk-management">2.7 Risk Management</h2>
+<p>Managing project risks is essential for the long-term stability of
+the Brandly platform.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Risk Category</th>
+<th style="text-align: left;">Potential Risk</th>
+<th style="text-align: left;">Impact</th>
+<th style="text-align: left;">Mitigation Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Security</strong></td>
+<td style="text-align: left;">Data breach of user credentials</td>
+<td style="text-align: left;">High</td>
+<td style="text-align: left;">Use industry-standard encryption (bcrypt)
+and HttpOnly secure cookies.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Financial</strong></td>
+<td style="text-align: left;">Stripe API downtime during checkout</td>
+<td style="text-align: left;">Critical</td>
+<td style="text-align: left;">Implement robust retry logic and manual
+sync triggers for brands.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Technical</strong></td>
+<td style="text-align: left;">Socket server overload during peak
+hours</td>
+<td style="text-align: left;">Medium</td>
+<td style="text-align: left;">Use horizontal scaling and optimized room
+management.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Legal</strong></td>
+<td style="text-align: left;">Dispute over content quality</td>
+<td style="text-align: left;">Medium</td>
+<td style="text-align: left;">Enforce clear deliverable briefs and
+mandatory revision cycles.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="domain-knowledge-influencer-marketing-tiers">2.8 Domain
+Knowledge: Influencer Marketing Tiers</h2>
+<p>To provide a relevant platform, Brandly categorizes influencers based
+on industry-standard metrics: - <strong>Nano-Influencers</strong>: 1,000
+– 10,000 followers. High engagement, cost-effective for local brands. -
+<strong>Micro-Influencers</strong>: 10,000 – 50,000 followers. Expert
+authority in specific niches (e.g., Tech, Beauty). - <strong>Mid-Tier
+Influencers</strong>: 50,000 – 500,000 followers. Broad reach with
+established trust. - <strong>Macro-Influencers</strong>: 50,000 –
+1,000,000 followers. High visibility, often managed by agencies. -
+<strong>Mega-Influencers</strong>: 1,000,000+ followers. Celebrity
+status, used for massive awareness campaigns.</p>
+<hr />
+<h1 id="chapter-3-analysis">CHAPTER 3: Analysis</h1>
+<h2 id="introduction-1">3.1 Introduction</h2>
+<p>The analysis phase focuses on understanding the functional flow and
+data transitions within the Brandly ecosystem. By decomposing the system
+into actors and use cases, we can ensure that every stakeholder’s
+requirements are met through logical software constructs.</p>
+<h2 id="system-requirements">3.2 System Requirements</h2>
+<p>To ensure the successful development and deployment of Brandly, the
+following hardware and software requirements were established.</p>
+<h3 id="development-requirements">3.2.1 Development Requirements</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Requirement</th>
+<th style="text-align: left;">Specification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Processor</strong></td>
+<td style="text-align: left;">Intel Core i5 or Apple M1/M2</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Memory</strong></td>
+<td style="text-align: left;">8GB RAM (Minimum)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Operating System</strong></td>
+<td style="text-align: left;">macOS / Windows 10+ / Linux</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>IDE</strong></td>
+<td style="text-align: left;">Visual Studio Code</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Database</strong></td>
+<td style="text-align: left;">MongoDB Atlas (Cloud)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Version Control</strong></td>
+<td style="text-align: left;">Git &amp; GitHub</td>
+</tr>
+</tbody>
+</table>
+<h3 id="server-requirements-deployment">3.2.2 Server Requirements
+(Deployment)</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Requirement</th>
+<th style="text-align: left;">Specification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Runtime</strong></td>
+<td style="text-align: left;">Node.js v20.x or higher</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Memory</strong></td>
+<td style="text-align: left;">512MB RAM (Minimum for microservices)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Storage</strong></td>
+<td style="text-align: left;">1GB SSD</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Environment</strong></td>
+<td style="text-align: left;">Linux-based (Heroku/Render/Vercel)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="end-user-requirements">3.2.3 End-User Requirements</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Requirement</th>
+<th style="text-align: left;">Specification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Browser</strong></td>
+<td style="text-align: left;">Chrome, Firefox, Safari, Edge</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Internet</strong></td>
+<td style="text-align: left;">Stable connection (Minimum 2Mbps)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Device</strong></td>
+<td style="text-align: left;">Laptop, Tablet, or Smartphone</td>
+</tr>
+</tbody>
+</table>
+<h2 id="use-case-specifications">3.3 Use Case Specifications</h2>
+<p>Each use case is decomposed here into its preconditions, main flow,
+and postconditions to provide a detailed functional roadmap.</p>
+<h3 id="uc-01-create-campaign">3.3.1 UC-01: Create Campaign</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Actor</strong></td>
+<td style="text-align: left;">Brand</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Precondition</strong></td>
+<td style="text-align: left;">Brand is logged in</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Main Flow</strong></td>
+<td style="text-align: left;">1. Brand clicks “New Campaign”<br>2. Brand
+enters Title, Brief, Budget<br>3. Brand selects Platform
+(Instagram/TikTok)<br>4. Brand clicks “Publish”</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Postcondition</strong></td>
+<td style="text-align: left;">Campaign is visible to influencers</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-03-sign-agreement">3.3.2 UC-03: Sign Agreement</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Actor</strong></td>
+<td style="text-align: left;">Brand, Influencer</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Precondition</strong></td>
+<td style="text-align: left;">Collaboration created, status is
+“ACCEPTED”</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Main Flow</strong></td>
+<td style="text-align: left;">1. User reviews the digital contract<br>2.
+User clicks “Confirm &amp; Sign”<br>3. System updates
+<code>agreed</code> flag<br>4. Socket notifies partner</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Postcondition</strong></td>
+<td style="text-align: left;">Status moves to “AWAITING FUNDS” if both
+sign</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-04-fund-escrow">3.3.3 UC-04: Fund Escrow</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Actor</strong></td>
+<td style="text-align: left;">Brand</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Precondition</strong></td>
+<td style="text-align: left;">Both parties have signed the
+agreement</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Main Flow</strong></td>
+<td style="text-align: left;">1. Brand clicks “Fund Escrow”<br>2. System
+creates Stripe session<br>3. Brand completes payment on Stripe<br>4.
+Webhook updates DB status</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Postcondition</strong></td>
+<td style="text-align: left;">Status moves to “ACTIVE”</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="use-case-diagrams">3.4 Use Case Diagrams</h2>
+<p>The following diagram visualizes the relationships between the actors
+and the system’s core functionalities.</p>
+<pre class="mermaid"><code>graph TD
+    subgraph Actors
+        B[Brand]
+        I[Influencer]
+        AI[AI Agent]
+    end
+
+    subgraph Use_Cases
+        UC1((Register/Login))
+        UC2((Create Campaign))
+        UC3((Search Influencers))
+        UC4((Sign Agreement))
+        UC5((Fund Escrow))
+        UC6((Submit Work))
+        UC7((Approve Payout))
+        UC8((System Moderation))
+    end
+
+    B --&gt; UC1
+    B --&gt; UC2
+    B --&gt; UC3
+    B --&gt; UC4
+    B --&gt; UC5
+    B --&gt; UC7
+
+    I --&gt; UC1
+    I --&gt; UC4
+    I --&gt; UC6
+
+    AI --&gt; UC8
+
+    style B fill:#FFD700,stroke:#333,stroke-width:2px,color:#000
+    style I fill:#FFD700,stroke:#333,stroke-width:2px,color:#000
+    style AI fill:#FFD700,stroke:#333,stroke-width:2px,color:#000
+    style UC1 fill:#E6E6FA,stroke:#333,stroke-width:1px,color:#000
+    style UC2 fill:#E6E6FA,stroke:#333,stroke-width:1px,color:#000
+    style UC3 fill:#E6E6FA,stroke:#333,stroke-width:1px,color:#000
+    style UC4 fill:#E6E6FA,stroke:#333,stroke-width:1px,color:#000
+    style UC5 fill:#E6E6FA,stroke:#333,stroke-width:1px,color:#000
+    style UC6 fill:#E6E6FA,stroke:#333,stroke-width:1px,color:#000
+    style UC7 fill:#E6E6FA,stroke:#333,stroke-width:1px,color:#000
+    style UC8 fill:#E6E6FA,stroke:#333,stroke-width:1px,color:#000</code></pre>
+<h2 id="data-flow-diagram-dfd">3.5 Data Flow Diagram (DFD)</h2>
+<h3 id="level-0-context-diagram">Level 0: Context Diagram</h3>
+<p>The Context Diagram shows the system as a single process interacting
+with external entities.</p>
+<pre class="mermaid"><code>graph LR
+    B[Brand] -- &quot;Campaign Data&quot; --&gt; S((Brandly System))
+    S -- &quot;Notifications&quot; --&gt; B
+    I[Influencer] -- &quot;Deliverable Link&quot; --&gt; S
+    S -- &quot;Payment&quot; --&gt; I
+    AI[AI Agent] -- &quot;Management&quot; --&gt; S</code></pre>
+<h3 id="level-1-process-decomposition">Level 1: Process
+Decomposition</h3>
+<p>Level 1 breaks down the main system into sub-processes:
+Authentication, Campaign Management, Collaboration Workspace, and
+Payment Gateway.</p>
+<pre class="mermaid"><code>graph TD
+    subgraph Brandly_Processes
+        P1((Auth Service))
+        P2((Campaign Service))
+        P3((Collab Service))
+        P4((Payment Service))
+    end
+
+    B[Brand] -- &quot;Credentials&quot; --&gt; P1
+    B -- &quot;Brief&quot; --&gt; P2
+    P2 -- &quot;Discover&quot; --&gt; I[Influencer]
+    I -- &quot;Proposal&quot; --&gt; P2
+    P2 -- &quot;Match&quot; --&gt; P3
+    P3 -- &quot;Agreement&quot; --&gt; B
+    B -- &quot;Fund&quot; --&gt; P4
+    P4 -- &quot;Escrow&quot; --&gt; DB[(Database)]
+    I -- &quot;Work&quot; --&gt; P3
+    P3 -- &quot;Approve&quot; --&gt; B
+    B -- &quot;Release&quot; --&gt; P4
+    P4 -- &quot;Payout&quot; --&gt; I
+
+    style B fill:#FFD700,stroke:#333,color:#000
+    style I fill:#FFD700,stroke:#333,color:#000
+    style P1 fill:#87CEEB,stroke:#333,color:#000
+    style P2 fill:#87CEEB,stroke:#333,color:#000
+    style P3 fill:#87CEEB,stroke:#333,color:#000
+    style P4 fill:#87CEEB,stroke:#333,color:#000</code></pre>
+<hr />
+<h1 id="chapter-4-design">CHAPTER 4: Design</h1>
+<h2 id="introduction-2">4.1 Introduction</h2>
+<p>The design phase translates the analytical models into technical
+blueprints. This includes the high-level architecture, the relational
+structure of the database, and the sequential logic of the application’s
+most critical features.</p>
+<h2 id="software-architecture-diagram">4.2 Software Architecture
+Diagram</h2>
+<p>Brandly utilizes a <strong>Service-Oriented Architecture
+(SOA)</strong> with a clear separation of concerns between the API layer
+and the business logic layer.</p>
+<pre class="mermaid"><code>graph TD
+    subgraph Client_Side
+        UI[React Frontend]
+        Redux[Redux State]
+        SocketC[Socket Client]
+    end
+
+    subgraph Server_Side
+        API[Express API]
+        AuthM[Auth Middleware]
+        Service[Service Layer]
+        SocketS[Socket.io Server]
+    end
+
+    subgraph External_Storage
+        DB[(MongoDB Atlas)]
+        Cloud[Cloudinary]
+    end
+
+    subgraph Finance
+        Stripe[Stripe API]
+    end
+
+    UI &lt;--&gt; API
+    API --&gt; AuthM
+    AuthM --&gt; Service
+    Service &lt;--&gt; DB
+    Service --&gt; Cloud
+    Service &lt;--&gt; Stripe
+    SocketC &lt;--&gt; SocketS
+    SocketS &lt;--&gt; Service
+
+    style UI fill:#90EE90,stroke:#333,color:#000
+    style API fill:#FFA07A,stroke:#333,color:#000
+    style Service fill:#FFA07A,stroke:#333,color:#000
+    style DB fill:#D3D3D3,stroke:#333,color:#000
+    style Stripe fill:#CCCCFF,stroke:#333,color:#000</code></pre>
+<h2 id="class-diagram">4.3 Class Diagram</h2>
+<p>The Class Diagram illustrates the relationships between the primary
+backend modules and their shared dependencies.</p>
+<pre class="mermaid"><code>classDiagram
+    class User {
+        +String email
+        +String password
+        +Enum role
+        +login()
+        +logout()
+    }
+    class Brand {
+        +String companyName
+        +Array campaigns
+    }
+    class Influencer {
+        +String niche
+        +Number followers
+    }
+    class Collaboration {
+        +ObjectId brandId
+        +ObjectId influencerId
+        +Boolean brandAgreed
+        +Boolean influencerAgreed
+        +confirmAgreement()
+    }
+    class Deliverable {
+        +String title
+        +Enum status
+        +submitLink()
+    }
+
+    User &lt;|-- Brand
+    User &lt;|-- Influencer
+    Brand &quot;1&quot; *-- &quot;many&quot; Collaboration
+    Influencer &quot;1&quot; *-- &quot;many&quot; Collaboration
+    Collaboration &quot;1&quot; *-- &quot;many&quot; Deliverable</code></pre>
+<h2 id="database-diagram-erd">4.4 Database Diagram (ERD)</h2>
+<p>The Entity Relationship Diagram defines the schema structure in
+MongoDB.</p>
+<pre class="mermaid"><code>erDiagram
+    USER ||--o{ BRAND : &quot;is&quot;
+    USER ||--o{ INFLUENCER : &quot;is&quot;
+    BRAND ||--o{ CAMPAIGN : &quot;creates&quot;
+    BRAND ||--o{ COLLABORATION : &quot;participates&quot;
+    INFLUENCER ||--o{ COLLABORATION : &quot;participates&quot;
+    COLLABORATION ||--o{ DELIVERABLE : &quot;contains&quot;
+    COLLABORATION ||--o{ ESCROW : &quot;funded_by&quot;
+
+    USER {
+        string email
+        string password
+        string role
+    }
+    COLLABORATION {
+        string status
+        boolean brandAgreed
+        boolean influencerAgreed
+        number agreedBudget
+    }
+    DELIVERABLE {
+        string title
+        string status
+        string submissionUrl
+    }</code></pre>
+<h2 id="sequence-diagram-agreement-escrow-flow">4.5 Sequence Diagram:
+Agreement &amp; Escrow Flow</h2>
+<p>This diagram details the real-time interaction between the Brand,
+Influencer, and the Server during the project kickoff.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    participant B as Brand
+    participant S as Server
+    participant I as Influencer
+    participant St as Stripe
+
+    Note over B,I: Project Accepted
+    B-&gt;&gt;S: Sign Agreement
+    S--&gt;&gt;I: [Socket] Partner Signed
+    I-&gt;&gt;S: Sign Agreement
+    S--&gt;&gt;B: [Socket] Mutual Agreement Reached
+    Note over B,I: Status: Awaiting Funds
+    B-&gt;&gt;S: Fund Escrow ($)
+    S-&gt;&gt;St: Create Payment Intent
+    St--&gt;&gt;B: Checkout UI
+    B-&gt;&gt;St: Pay
+    St--&gt;&gt;S: Webhook: Success
+    S--&gt;&gt;B: [Socket] Escrow Funded
+    S--&gt;&gt;I: [Socket] Project Active</code></pre>
+<h2 id="activity-diagram-deliverable-lifecycle">4.6 Activity Diagram:
+Deliverable Lifecycle</h2>
+<p>The workflow of a single task from creation to payment release.</p>
+<pre class="mermaid"><code>stateDiagram-v2
+    [*] --&gt; InProgress: Brand Creates Task
+    InProgress --&gt; Review: Influencer Submits Link
+    Review --&gt; Revision: Brand Requests Change
+    Revision --&gt; Review: Influencer Re-submits
+    Review --&gt; Approved: Brand Approves
+    Approved --&gt; Paid: Escrow Release
+    Paid --&gt; [*]</code></pre>
+<h2 id="component-deployment-diagrams">4.7 Component &amp; Deployment
+Diagrams</h2>
+<h3 id="component-diagram">Component Diagram</h3>
+<p>Shows how different software components interact.</p>
+<pre class="mermaid"><code>graph LR
+    subgraph Frontend_App
+        Comp[UI Components]
+        Store[Redux Store]
+    end
+    subgraph Backend_App
+        Route[API Routes]
+        Logic[Business Services]
+        Socket[Socket Manager]
+    end
+    Comp --&gt; Route
+    Store --&gt; Route
+    Socket &lt;--&gt; Comp
+    Route --&gt; Logic</code></pre>
+<h3 id="deployment-diagram">Deployment Diagram</h3>
+<p>Visualizes the physical deployment environment.</p>
+<pre class="mermaid"><code>graph TD
+    subgraph Cloud_Environment
+        Vercel[Vercel - Frontend]
+        Render[Render/Heroku - Node.js Backend]
+        Atlas[MongoDB Atlas - DB Cluster]
+    end
+    Client[User Browser] -- HTTPS --&gt; Vercel
+    Vercel -- API Calls --&gt; Render
+    Render -- ODM --&gt; Atlas</code></pre>
+<h2 id="data-dictionary">4.8 Data Dictionary</h2>
+<p>This section defines the structural attributes of the database
+entities used in Brandly.</p>
+<h3 id="user-model">4.8.1 User Model</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Attribute</th>
+<th style="text-align: left;">Data Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>_id</code></td>
+<td style="text-align: left;">ObjectId</td>
+<td style="text-align: left;">Primary Key</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>email</code></td>
+<td style="text-align: left;">String</td>
+<td style="text-align: left;">Unique user identifier</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>password</code></td>
+<td style="text-align: left;">String</td>
+<td style="text-align: left;">Hashed credentials</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>role</code></td>
+<td style="text-align: left;">Enum</td>
+<td style="text-align: left;">‘brand’ or ‘influencer’</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>isVerified</code></td>
+<td style="text-align: left;">Boolean</td>
+<td style="text-align: left;">Email verification status</td>
+</tr>
+</tbody>
+</table>
+<h3 id="collaboration-model">4.8.2 Collaboration Model</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Attribute</th>
+<th style="text-align: left;">Data Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>_id</code></td>
+<td style="text-align: left;">ObjectId</td>
+<td style="text-align: left;">Primary Key</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>brandId</code></td>
+<td style="text-align: left;">ObjectId</td>
+<td style="text-align: left;">Reference to User</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>influencerId</code></td>
+<td style="text-align: left;">ObjectId</td>
+<td style="text-align: left;">Reference to User</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>status</code></td>
+<td style="text-align: left;">Enum</td>
+<td style="text-align: left;">‘accepted’, ‘awaiting_funds’, ‘active’,
+‘completed’</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>brandAgreed</code></td>
+<td style="text-align: left;">Boolean</td>
+<td style="text-align: left;">Brand signature flag</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>influencerAgreed</code></td>
+<td style="text-align: left;">Boolean</td>
+<td style="text-align: left;">Influencer signature flag</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>totalFunded</code></td>
+<td style="text-align: left;">Number</td>
+<td style="text-align: left;">Amount currently in Escrow</td>
+</tr>
+</tbody>
+</table>
+<h3 id="deliverable-model">4.8.3 Deliverable Model</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Attribute</th>
+<th style="text-align: left;">Data Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>_id</code></td>
+<td style="text-align: left;">ObjectId</td>
+<td style="text-align: left;">Primary Key</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>collabId</code></td>
+<td style="text-align: left;">ObjectId</td>
+<td style="text-align: left;">Reference to Collaboration</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>title</code></td>
+<td style="text-align: left;">String</td>
+<td style="text-align: left;">Task name (e.g. “Reel Post”)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>status</code></td>
+<td style="text-align: left;">Enum</td>
+<td style="text-align: left;">‘IN_PROGRESS’, ‘REVIEW’, ‘APPROVED’,
+‘PAID’</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>submissionUrl</code></td>
+<td style="text-align: left;">String</td>
+<td style="text-align: left;">Link to the content</td>
+</tr>
+</tbody>
+</table>
+<h2 id="system-security-architecture">4.9 System Security
+Architecture</h2>
+<p>Security is a foundational pillar of the Brandly platform, especially
+given its focus on financial escrow and sensitive user data.</p>
+<h3 id="authentication-authorization">4.9.1 Authentication &amp;
+Authorization</h3>
+<ul>
+<li><strong>JWT with HttpOnly Cookies</strong>: To prevent Cross-Site
+Scripting (XSS) attacks, access and refresh tokens are stored in secure,
+HttpOnly cookies.</li>
+<li><strong>RBAC (Role-Based Access Control)</strong>: Middleware
+enforces role checks (e.g., ensuring an influencer cannot access
+brand-only dashboard analytics).</li>
+<li><strong>Password Hashing</strong>: All user passwords are salted and
+hashed using <code>bcrypt</code> before storage in the database.</li>
+</ul>
+<h3 id="real-time-communication-security">4.9.2 Real-Time Communication
+Security</h3>
+<ul>
+<li><strong>Socket Authentication</strong>: Socket connections are
+verified using the user’s JWT.</li>
+<li><strong>Room Isolation</strong>: Users can only join socket rooms
+corresponding to their active <code>collaborationId</code>, preventing
+unauthorized project state monitoring.</li>
+</ul>
+<h3 id="financial-security-stripe">4.9.3 Financial Security
+(Stripe)</h3>
+<ul>
+<li><strong>Webhooks Verification</strong>: Brandly uses Stripe Webhooks
+to listen for payment events. All incoming webhook requests are verified
+using the <code>STRIPE_WEBHOOK_SECRET</code> to prevent “replay” or
+spoofing attacks.</li>
+<li><strong>Idempotency</strong>: Payout logic is designed to be
+idempotent, ensuring that influencers are never accidentally paid twice
+for the same deliverable.</li>
+</ul>
+<hr />
+<h1 id="chapter-5-graphical-user-interfaces">CHAPTER 5: Graphical User
+Interfaces</h1>
+<h2 id="interface-structure">5.1 Interface Structure</h2>
+<p>The Brandly interface is designed with a
+<strong>“Dashboard-First”</strong> approach, utilizing a standard
+three-pane layout to ensure maximum productivity. - <strong>Top
+Navigation (Action Bar)</strong>: Contains persistent tools like Search,
+Notifications, and the user Profile dropdown. - <strong>Left
+Sidebar</strong>: Provides navigation between the Dashboard, My
+Campaigns, Collaborations, and Messages. - <strong>Main Content
+Area</strong>: A dynamic viewport that renders role-specific components
+(e.g., the Kanban task board or the Discovery engine).</p>
+<h2 id="navigation-workflow">5.2 Navigation &amp; Workflow</h2>
+<p>The user journey is designed to be linear and friction-free: 1.
+<strong>Onboarding</strong>: User registers and selects a role
+(Brand/Influencer). 2. <strong>Discovery</strong>: Brand posts a
+campaign; Influencer finds it and applies. 3.
+<strong>Negotiation</strong>: Brand accepts application; system creates
+a Collaboration workspace. 4. <strong>Execution</strong>: Parties sign
+agreement -&gt; Brand fund Escrow -&gt; Influencer submits tasks. 5.
+<strong>Completion</strong>: Brand approves work -&gt; System releases
+payment -&gt; Project closes.</p>
+<h2 id="form-design-validation">5.3 Form Design &amp; Validation</h2>
+<p>All forms utilize <strong>real-time validation</strong> to prevent
+data entry errors: - <strong>Required Fields</strong>: Marked with an
+asterisk (*) and enforced via React state. - <strong>Visual
+Feedback</strong>: Input borders turn red with specific error messages
+(e.g., “Invalid URL format” for deliverable submissions). -
+<strong>Constraints</strong>: Minimum budget requirements and
+platform-specific link validation (e.g., checking for
+<code>instagram.com</code>).</p>
+<h2 id="role-based-interfaces">5.4 Role-Based Interfaces</h2>
+<ul>
+<li><strong>Brand Dashboard</strong>: Focused on <strong>ROI and
+Management</strong>. Highlights include “Total Spent,” “Active
+Projects,” and “Awaiting Approval” lists.</li>
+<li><strong>Influencer Dashboard</strong>: Focused on <strong>Earnings
+and Deadlines</strong>. Highlights include “Upcoming Tasks,” “Wallet
+Balance,” and “New Offers” notifications.</li>
+</ul>
+<hr />
+<h1 id="chapter-6-testing">CHAPTER 6: Testing</h1>
+<h2 id="introduction-3">6.1 Introduction</h2>
+<p>The testing phase ensures the robustness of the platform’s security
+logic and its real-time synchronization capabilities. We utilized a
+combination of manual verification and automated unit testing for the
+service layer.</p>
+<h2 id="testing-strategy">6.2 Testing Strategy</h2>
+<ul>
+<li><strong>Black Box Testing</strong>: Testing the system’s
+functionality from an end-user perspective without knowledge of internal
+code (e.g., checking if a task moves to “Review” after submission).</li>
+<li><strong>White Box Testing</strong>: Testing internal logic,
+particularly the Stripe webhook handlers and Socket room
+assignments.</li>
+</ul>
+<h2 id="types-of-testing-performed">6.3 Types of Testing Performed</h2>
+<ul>
+<li><strong>Unit Testing</strong>: Verified individual methods in
+<code>collaboration.service.js</code>.</li>
+<li><strong>Integration Testing</strong>: Tested the interaction between
+the React frontend and the Socket.io backend.</li>
+<li><strong>User Acceptance Testing (UAT)</strong>: Simulating a full
+collaboration flow from two separate browser windows (Brand and
+Influencer).</li>
+</ul>
+<h2 id="test-plan">6.4 Test Plan</h2>
+<ul>
+<li><strong>Environment</strong>: Chrome 124, Node.js 22, MongoDB
+Atlas.</li>
+<li><strong>Features Tested</strong>: Authentication, Campaign posting,
+Agreement signing, Escrow funding, Task submission, Real-time sync.</li>
+</ul>
+<h2 id="testing-workflow-diagram">6.5 Testing Workflow Diagram</h2>
+<p>The following diagram illustrates the iterative testing and
+bug-fixing lifecycle applied during the Brandly development process.</p>
+<pre class="mermaid"><code>graph TD
+    A[Unit Testing] --&gt; B[Integration Testing]
+    B --&gt; C[User Acceptance Testing]
+    C --&gt; D{Pass?}
+    D -- Yes --&gt; E[Final Documentation]
+    D -- No --&gt; F[Bug Fixing]
+    F --&gt; A
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style C fill:#bfb,stroke:#333,stroke-width:2px
+    style E fill:#dfd,stroke:#333,stroke-width:4px
+    style F fill:#fbb,stroke:#333,stroke-width:2px</code></pre>
+<h2 id="test-cases">6.6 Test Cases</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">ID</th>
+<th style="text-align: left;">Scenario</th>
+<th style="text-align: left;">Input</th>
+<th style="text-align: left;">Expected Result</th>
+<th style="text-align: left;">Actual Result</th>
+<th style="text-align: left;">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">TC-01</td>
+<td style="text-align: left;">Valid Login</td>
+<td style="text-align: left;">Email/Password</td>
+<td style="text-align: left;">Redirect to Dashboard</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-02</td>
+<td style="text-align: left;">Invalid Login</td>
+<td style="text-align: left;">Wrong Password</td>
+<td style="text-align: left;">Error: “Invalid credentials”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-03</td>
+<td style="text-align: left;">Sign Agreement (Self)</td>
+<td style="text-align: left;">Click “Sign”</td>
+<td style="text-align: left;">Flag <code>brandAgreed</code> becomes
+true</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-04</td>
+<td style="text-align: left;">Sign Agreement (Partner)</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">Influencer UI updates to “Signed”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-05</td>
+<td style="text-align: left;">Fund Escrow (Unsigned)</td>
+<td style="text-align: left;">Click “Fund”</td>
+<td style="text-align: left;">Button is disabled</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-06</td>
+<td style="text-align: left;">Create Task (Unfunded)</td>
+<td style="text-align: left;">Click “Add”</td>
+<td style="text-align: left;">Toast: “Escrow must be funded”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-07</td>
+<td style="text-align: left;">Submit Link (Valid)</td>
+<td style="text-align: left;">Instagram URL</td>
+<td style="text-align: left;">Task moves to “REVIEW”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-08</td>
+<td style="text-align: left;">Submit Link (Invalid)</td>
+<td style="text-align: left;">Plain Text</td>
+<td style="text-align: left;">Error: “Invalid URL”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-09</td>
+<td style="text-align: left;">Approve Task</td>
+<td style="text-align: left;">Click “Approve”</td>
+<td style="text-align: left;">Status: “APPROVED”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-10</td>
+<td style="text-align: left;">Real-time Sync (Task)</td>
+<td style="text-align: left;">Influencer Submits</td>
+<td style="text-align: left;">Brand UI updates instantly</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-11</td>
+<td style="text-align: left;">Real-time Sync (Status)</td>
+<td style="text-align: left;">Brand Approves</td>
+<td style="text-align: left;">Influencer UI updates instantly</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-12</td>
+<td style="text-align: left;">Request Cancellation</td>
+<td style="text-align: left;">Click “Cancel”</td>
+<td style="text-align: left;">Status: “PENDING CANCEL”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-13</td>
+<td style="text-align: left;">Accept Completion</td>
+<td style="text-align: left;">Click “Accept”</td>
+<td style="text-align: left;">Project moves to “COMPLETED”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-14</td>
+<td style="text-align: left;">Stripe Webhook</td>
+<td style="text-align: left;">Mock Success</td>
+<td style="text-align: left;">Database updates to
+<code>funded</code></td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-15</td>
+<td style="text-align: left;">Socket Disconnect</td>
+<td style="text-align: left;">Close Tab</td>
+<td style="text-align: left;">Notification badge persists</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-16</td>
+<td style="text-align: left;">Role Guard</td>
+<td style="text-align: left;">Influencer hits Brand URL</td>
+<td style="text-align: left;">Redirect to 404/Home</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-17</td>
+<td style="text-align: left;">Search Filter</td>
+<td style="text-align: left;">Niche: “Travel”</td>
+<td style="text-align: left;">Only travel influencers shown</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-18</td>
+<td style="text-align: left;">Profile Update</td>
+<td style="text-align: left;">Change Bio</td>
+<td style="text-align: left;">Persistence verified on refresh</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-19</td>
+<td style="text-align: left;">Auth Guard</td>
+<td style="text-align: left;">Hit /dashboard logged out</td>
+<td style="text-align: left;">Redirect to Login</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-20</td>
+<td style="text-align: left;">Message Notification</td>
+<td style="text-align: left;">Send Message</td>
+<td style="text-align: left;">Sidebar badge increments</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-21</td>
+<td style="text-align: left;">Change Profile Img</td>
+<td style="text-align: left;">Upload Image</td>
+<td style="text-align: left;">Image visible in header</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-22</td>
+<td style="text-align: left;">Campaign List</td>
+<td style="text-align: left;">Hit /campaigns</td>
+<td style="text-align: left;">10 campaigns displayed</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-23</td>
+<td style="text-align: left;">Search Keywords</td>
+<td style="text-align: left;">Search “Nike”</td>
+<td style="text-align: left;">Only Nike-related shown</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-24</td>
+<td style="text-align: left;">Multi-Tab Sync</td>
+<td style="text-align: left;">Open 2 Tabs</td>
+<td style="text-align: left;">State stays synced on both</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-25</td>
+<td style="text-align: left;">Session Expiry</td>
+<td style="text-align: left;">Wait for TTL</td>
+<td style="text-align: left;">Auto-redirect to Login</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-26</td>
+<td style="text-align: left;">Deliverable Delete</td>
+<td style="text-align: left;">Click “Delete”</td>
+<td style="text-align: left;">Item removed from list</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-27</td>
+<td style="text-align: left;">Request Action</td>
+<td style="text-align: left;">Click “Complete”</td>
+<td style="text-align: left;">Partner sees “Review Action”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-28</td>
+<td style="text-align: left;">Handle Action</td>
+<td style="text-align: left;">Click “Reject”</td>
+<td style="text-align: left;">Request status cleared</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-29</td>
+<td style="text-align: left;">Revision Request</td>
+<td style="text-align: left;">Enter comments</td>
+<td style="text-align: left;">Influencer sees “Revision”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-30</td>
+<td style="text-align: left;">Social Link Auth</td>
+<td style="text-align: left;">Click “IG Login”</td>
+<td style="text-align: left;">Token stored in Profile</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-31</td>
+<td style="text-align: left;">Empty Search</td>
+<td style="text-align: left;">Search “”</td>
+<td style="text-align: left;">Shows all results</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-32</td>
+<td style="text-align: left;">Large File Upload</td>
+<td style="text-align: left;">Upload 20MB</td>
+<td style="text-align: left;">Error: “File too large”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-33</td>
+<td style="text-align: left;">Rate Limiting</td>
+<td style="text-align: left;">Spam /login</td>
+<td style="text-align: left;">Error: “Too many requests”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-34</td>
+<td style="text-align: left;">DB Error Handling</td>
+<td style="text-align: left;">Kill MongoDB</td>
+<td style="text-align: left;">Error: “System maintenance”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-35</td>
+<td style="text-align: left;">Forgot Password</td>
+<td style="text-align: left;">Enter Email</td>
+<td style="text-align: left;">OTP sent to Inbox</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-36</td>
+<td style="text-align: left;">Valid OTP</td>
+<td style="text-align: left;">Enter Correct OTP</td>
+<td style="text-align: left;">Password reset enabled</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-37</td>
+<td style="text-align: left;">Invalid OTP</td>
+<td style="text-align: left;">Enter 111111</td>
+<td style="text-align: left;">Error: “Invalid OTP”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-38</td>
+<td style="text-align: left;">Campaign Update</td>
+<td style="text-align: left;">Edit Budget</td>
+<td style="text-align: left;">New budget reflected</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-39</td>
+<td style="text-align: left;">Collaboration List</td>
+<td style="text-align: left;">Hit /collabs</td>
+<td style="text-align: left;">Shows active contracts</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-40</td>
+<td style="text-align: left;">Deliverable Order</td>
+<td style="text-align: left;">Drag &amp; Drop</td>
+<td style="text-align: left;">Order persists on refresh</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-41</td>
+<td style="text-align: left;">Profile Visibility</td>
+<td style="text-align: left;">Copy URL</td>
+<td style="text-align: left;">Public profile accessible</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-42</td>
+<td style="text-align: left;">XSS Protection</td>
+<td style="text-align: left;">Enter </td>
+<td style="text-align: left;">Escaped and safe</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-43</td>
+<td style="text-align: left;">SQL Injection</td>
+<td style="text-align: left;">Enter ’ OR 1=1</td>
+<td style="text-align: left;">No data leaked</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-44</td>
+<td style="text-align: left;">Mobile Sidebar</td>
+<td style="text-align: left;">Resize Window</td>
+<td style="text-align: left;">Sidebar hides in Burger</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-45</td>
+<td style="text-align: left;">Dark Mode</td>
+<td style="text-align: left;">Toggle Dark</td>
+<td style="text-align: left;">UI colors update globally</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-46</td>
+<td style="text-align: left;">Notification Mark</td>
+<td style="text-align: left;">Click “Read”</td>
+<td style="text-align: left;">Red dot disappears</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-47</td>
+<td style="text-align: left;">Activity Feed</td>
+<td style="text-align: left;">Create Task</td>
+<td style="text-align: left;">Activity logged in feed</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-48</td>
+<td style="text-align: left;">AI Moderation</td>
+<td style="text-align: left;">Mock Conflict</td>
+<td style="text-align: left;">AI Agent flags project</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-49</td>
+<td style="text-align: left;">Email Webhook</td>
+<td style="text-align: left;">Send Notification</td>
+<td style="text-align: left;">Email received in Mailtrap</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">TC-50</td>
+<td style="text-align: left;">Final Completion</td>
+<td style="text-align: left;">All Approved</td>
+<td style="text-align: left;">Project moved to “Archive”</td>
+<td style="text-align: left;">Success</td>
+<td style="text-align: left;">PASS</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="chapter-7-conclusion-and-future-work">CHAPTER 7: Conclusion and
+Future Work</h1>
+<h2 id="summary-of-findings">7.1 Summary of Findings</h2>
+<p>The development of Brandly successfully addressed the core challenges
+of trust and synchronization in influencer marketing. The implementation
+of a <strong>Digital Signature + Escrow</strong> workflow has created a
+secure environment for financial transactions, while
+<strong>Socket.io</strong> has eliminated the “manual refresh” lag that
+plagues existing platforms.</p>
+<h2 id="challenges-limitations">7.2 Challenges &amp; Limitations</h2>
+<ul>
+<li><strong>Socket Room Management</strong>: Handling state
+synchronization across multiple tabs for the same user required careful
+session management.</li>
+<li><strong>Stripe Webhook Latency</strong>: Ensuring the UI reflects
+payment success immediately while waiting for the official Stripe
+webhook was resolved via optimistic UI updates followed by server
+confirmation.</li>
+</ul>
+<h2 id="future-work">7.3 Future Work</h2>
+<ul>
+<li><strong>AI Matchmaking Engine</strong>: Implementing a machine
+learning model to suggest influencers based on brand sentiment and past
+campaign performance.</li>
+<li><strong>Native Mobile App</strong>: Developing React Native versions
+for iOS and Android to support push notifications.</li>
+<li><strong>Multi-Currency Support</strong>: Expanding Stripe
+integration to support global influencers in their local
+currencies.</li>
+</ul>
+<h2 id="conclusion">7.4 Conclusion</h2>
+<p>Brandly represents a significant step forward in professionalizing
+the creator economy. By combining modern web technologies with secure
+financial practices, we have built a platform that is not only
+technically robust but also commercially viable and user-centric.</p>
+<style>
+  /* Ensure Mermaid diagrams have enough space and don't overflow in a squeezed way */
+  .mermaid {
+    width: 100% !important;
+    max-width: 1200px !important;
+    margin: 30px auto !important;
+    display: flex;
+    justify-content: center;
+  }
+  
+  /* Academic styling for the HTML document */
+  body {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 40px;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f5f5f5;
+  }
+  
+  .container {
+    background-color: white;
+    padding: 60px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    border-radius: 8px;
+  }
+  
+  h1, h2, h3 {
+    color: #2c3e50;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+  }
+  
+  th, td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+  }
+  
+  th {
+    background-color: #f8f9fa;
+  }
+</style>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  
+  // Fix Pandoc's output: remove <code> tags inside <pre class="mermaid">
+  document.querySelectorAll('pre.mermaid code').forEach(code => {
+    const pre = code.parentElement;
+    pre.textContent = code.textContent;
+  });
+
+  mermaid.initialize({ 
+    startOnLoad: true,
+    theme: 'default',
+    securityLevel: 'loose',
+    gantt: {
+      useWidth: 1200,
+      fontSize: 14,
+      sectionFontSize: 16,
+      numberSectionStyles: 4,
+      axisFormat: '%b %d',
+      tickInterval: '1 week'
+    }
+  });
+</script>
+</body>
+</html>

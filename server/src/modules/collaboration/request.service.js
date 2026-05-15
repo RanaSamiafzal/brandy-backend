@@ -72,7 +72,14 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
         title: 'New Collaboration Request',
         description: `You have received a new collaboration request for "${campaign?.name || 'a campaign'}"`,
         relatedId: request._id,
-        category: 'application'
+        category: 'collaboration' // Changed from 'application' to 'collaboration' for real-time sync
+    });
+
+    // Direct socket notification for the receiver to ensure immediate UI update
+    socketManager.emitToUser(targetReceiverId, 'collaboration_updated', { 
+        collaborationId: request._id, 
+        status: request.status,
+        type: 'NEW_REQUEST'
     });
 
     return request;
@@ -364,11 +371,13 @@ const acceptRequest = async (requestId, userId) => {
             collaboration._id
         );
 
-        // 5. Update campaign status to perfectly sync with the new collaboration's status ('active')
-        if (campaign && campaign.status !== 'active') {
+        // 5. Update campaign status and selected influencer to perfectly sync with the new collaboration's status
+        campaign.selectedInfluencer = collaboration.influencer;
+        campaign.collaboration = collaboration._id;
+        if (campaign.status !== 'active') {
             campaign.status = 'active';
-            await campaign.save({ session });
         }
+        await campaign.save({ session });
 
         await session.commitTransaction();
 

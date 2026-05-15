@@ -3,7 +3,8 @@ import Notification from "./notification.model.js";
 const getUserNotifications = async (userId, limit = 20) => {
     return await Notification.find({ user: userId })
         .sort({ createdAt: -1 })
-        .limit(limit);
+        .limit(limit)
+        .lean();
 };
 
 const markAsRead = async (notificationId, userId) => {

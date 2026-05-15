@@ -81,7 +81,7 @@ const updateCollaborationStatus = async (id, userId, status, reason = "") => {
 /**
  * Submit an action request (CANCEL, COMPLETE, RESUME)
  */
-const submitActionRequest = async (id, userId, { type, reason }) => {
+const submitActionRequest = async (id, userId, { type, reason, proposedTasks = [] }) => {
     const collaboration = await Collaboration.findById(id);
     if (!collaboration) throw new ApiError(validationStatus.notFound, "Collaboration not found");
 
@@ -128,7 +128,8 @@ const submitActionRequest = async (id, userId, { type, reason }) => {
         requestedBy: userId,
         reason,
         status: "PENDING",
-        requestedAt: new Date()
+        requestedAt: new Date(),
+        proposedTasks: proposedTasks || []
     };
 
     await collaboration.save();
@@ -250,6 +251,53 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
                 await influencerProfile.save();
             }
         }
+    } else if (type === "ADD_TASKS") {
+        // --- ADD_TASKS LOGIC ---
+        // 1. Calculate new tasks budget
+        const proposedTasks = collaboration.actionRequest.proposedTasks || [];
+        const additionalBudget = proposedTasks.reduce((sum, t) => sum + (t.allocatedBudget || 0), 0);
+
+        // 2. Add tasks to deliverables
+        proposedTasks.forEach(task => {
+            // Convert to plain object if it's a Mongoose sub-document
+            const taskObj = typeof task.toObject === 'function' ? task.toObject() : task;
+            
+            // Ensure status is PENDING and required fields are present
+            collaboration.deliverables.push({
+                title: taskObj.title || "Additional Deliverable",
+                platform: taskObj.platform || "instagram",
+                description: taskObj.description || "",
+                dueDate: taskObj.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                allocatedBudget: taskObj.allocatedBudget || 0,
+                status: "PENDING",
+                paymentStatus: "unpaid",
+                isAdditional: true
+            });
+        });
+
+        // 3. Update agreed budget
+        const oldBudget = collaboration.agreedBudget || 0;
+        collaboration.agreedBudget = Math.round((oldBudget + additionalBudget) * 100) / 100;
+
+        // 4. Set status to 'awaiting_funds' if budget increased (so brand can pay the difference)
+        if (additionalBudget > 0) {
+            collaboration.escrowFunded = false; // Mark as not fully funded
+            collaboration.status = "awaiting_funds";
+            
+            // Clear old PaymentIntent ID if it's no longer valid (different amount or status)
+            if (collaboration.stripePaymentIntentId) {
+                collaboration.stripePaymentIntentId = null;
+            }
+        }
+
+        // 5. Reset actionRequest after successful processing
+        collaboration.actionRequest = {
+            type: "NONE",
+            status: "IDLE",
+            proposedTasks: []
+        };
+
+        console.log(`✅ Approved ADD_TASKS: Added ${proposedTasks.length} tasks. Budget increased from $${oldBudget} to $${collaboration.agreedBudget}. Status set to: ${collaboration.status}`);
     }
 
     const updatedCollab = await collaboration.save();
@@ -302,6 +350,10 @@ const handleActionRequest = async (id, userId, { decision, reviewData = null }) 
 
     const collabData = { collaborationId: updatedCollab._id, status: updatedCollab.status };
     socketManager.emitToRoom(updatedCollab._id.toString(), "collaboration_updated", collabData);
+    
+    // Also emit directly to both users to ensure their list views refresh
+    socketManager.emitToUser(updatedCollab.brand._id || updatedCollab.brand, "collaboration_updated", collabData);
+    socketManager.emitToUser(updatedCollab.influencer._id || updatedCollab.influencer, "collaboration_updated", collabData);
 
     return updatedCollab;
 };

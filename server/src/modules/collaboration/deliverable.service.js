@@ -40,6 +40,11 @@ const addDeliverable = async (collaborationId, userId, deliverableData) => {
     }
 
     collaboration.deliverables.push(deliverableData);
+
+    // Recalculate total allocated with precision
+    const updatedAllocated = collaboration.deliverables.reduce((sum, d) => sum + (d.allocatedBudget || 0), 0);
+    console.log(`[Deliverable] Added task. Total allocated: $${updatedAllocated} / $${collaboration.agreedBudget}`);
+
     await collaboration.save();
 
     // Notify the influencer
@@ -55,6 +60,13 @@ const addDeliverable = async (collaborationId, userId, deliverableData) => {
 
     const delivData = { collaborationId: collaboration._id, deliverableId: deliverableData._id, status: deliverableData.status };
     socketManager.emitToRoom(collaboration._id.toString(), "deliverable_updated", delivData);
+
+    // Also emit collaboration_updated to refresh budget summary on frontend
+    socketManager.emitToRoom(collaboration._id.toString(), "collaboration_updated", {
+        collaborationId: collaboration._id,
+        agreedBudget: collaboration.agreedBudget,
+        totalPaidAmount: collaboration.totalPaidAmount
+    });
 
     return collaboration;
 };
@@ -129,6 +141,13 @@ const updateDeliverable = async (collaborationId, deliverableId, userId, updateD
     const delivData = { collaborationId: collaboration._id, deliverableId, status: deliverable.status };
     socketManager.emitToRoom(collaboration._id.toString(), "deliverable_updated", delivData);
 
+    // Also emit collaboration_updated to refresh budget summary on frontend
+    socketManager.emitToRoom(collaboration._id.toString(), "collaboration_updated", {
+        collaborationId: collaboration._id,
+        agreedBudget: collaboration.agreedBudget,
+        totalPaidAmount: collaboration.totalPaidAmount
+    });
+
     return collaboration;
 };
 
@@ -169,6 +188,10 @@ const submitDeliverable = async (collaborationId, deliverableId, userId, submiss
     const deliverableData = { collaborationId: collaboration._id, deliverableId, status: deliverable.status };
     socketManager.emitToRoom(collaboration._id.toString(), "deliverable_updated", deliverableData);
 
+    // Also notify users directly for list view refresh
+    socketManager.emitToUser(collaboration.brand, "collaboration_updated", { collaborationId: collaboration._id });
+    socketManager.emitToUser(collaboration.influencer, "collaboration_updated", { collaborationId: collaboration._id });
+
     return collaboration;
 };
 
@@ -198,7 +221,7 @@ const reviewDeliverable = async (collaborationId, deliverableId, userId, { statu
     deliverable.status = status;
     if (status === "APPROVED") {
         deliverable.approvedAt = new Date();
-        deliverable.revisionNotes = ""; 
+        deliverable.revisionNotes = "";
         if (isFinal !== undefined) deliverable.isFinal = isFinal;
     } else {
         deliverable.revisionNotes = revisionNotes || "Please review the requirements.";
@@ -211,7 +234,7 @@ const reviewDeliverable = async (collaborationId, deliverableId, userId, { statu
     if (status === "APPROVED" && collaboration.escrowFunded && deliverable.paymentStatus === "unpaid") {
         try {
             await stripeService.transferDeliverablePayout(collaborationId, deliverableId);
-            
+
             // Re-fetch to get updated payment status and transfer ID
             const updatedCollab = await Collaboration.findById(collaborationId);
 
@@ -251,6 +274,10 @@ const reviewDeliverable = async (collaborationId, deliverableId, userId, { statu
     const delivData = { collaborationId: collaboration._id, deliverableId, status };
     socketManager.emitToRoom(collaboration._id.toString(), "deliverable_updated", delivData);
 
+    // Also notify users directly for list view refresh
+    socketManager.emitToUser(collaboration.brand, "collaboration_updated", { collaborationId: collaboration._id });
+    socketManager.emitToUser(collaboration.influencer, "collaboration_updated", { collaborationId: collaboration._id });
+
     return collaboration;
 };
 
@@ -282,13 +309,20 @@ const deleteDeliverable = async (collaborationId, deliverableId, userId) => {
     const delivData = { collaborationId: collaboration._id, deliverableId, status: "DELETED" };
     socketManager.emitToRoom(collaboration._id.toString(), "deliverable_updated", delivData);
 
+    // Also emit collaboration_updated to refresh budget summary on frontend
+    socketManager.emitToRoom(collaboration._id.toString(), "collaboration_updated", {
+        collaborationId: collaboration._id,
+        agreedBudget: collaboration.agreedBudget,
+        totalPaidAmount: collaboration.totalPaidAmount
+    });
+
     return collaboration;
 };
 
 export const deliverableService = {
-  addDeliverable,
-  updateDeliverable,
-  submitDeliverable,
-  reviewDeliverable,
-  deleteDeliverable
+    addDeliverable,
+    updateDeliverable,
+    submitDeliverable,
+    reviewDeliverable,
+    deleteDeliverable
 };

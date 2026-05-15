@@ -35,4 +35,7 @@ router.delete("/", userController.deleteAccount);
 // PATCH /users/deactivate — temporary account deactivation
 router.patch("/deactivate", userController.deactivateAccount);
 
+// POST /users/report — report a user for behavioral tracking
+router.post("/report", userController.reportUser);
+
 export default router;

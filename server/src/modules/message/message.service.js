@@ -7,7 +7,8 @@ const getConversations = async (userId) => {
         .populate("participants", "fullname email profilePic role status lastActive verifiedPlatforms")
         .populate("campaign", "name image")
         .populate("collaboration", "status")
-        .sort({ updatedAt: -1 });
+        .sort({ updatedAt: -1 })
+        .lean();
 
     // Auto-healing for unlinked conversations
     const unlinkedIndices = conversations.reduce((acc, conv, i) => {
@@ -50,7 +51,8 @@ const getConversations = async (userId) => {
             .populate("participants", "fullname email profilePic role status lastActive verifiedPlatforms")
             .populate("campaign", "name image")
             .populate("collaboration", "status")
-            .sort({ updatedAt: -1 });
+            .sort({ updatedAt: -1 })
+            .lean();
     }
 
     return conversations;
@@ -67,7 +69,8 @@ const getMessages = async (conversationId, userId) => {
     return await Message.find({ conversationId })
         .populate("sender", "fullname profilePic verifiedPlatforms")
         .populate("replyTo")
-        .sort({ createdAt: 1 });
+        .sort({ createdAt: 1 })
+        .lean();
 };
 
 const createConversation = async (senderId, receiverId, campaignId = null, collaborationId = null) => {

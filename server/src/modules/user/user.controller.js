@@ -7,6 +7,7 @@ import { uploadOnCloudinary } from "../../config/cloudinary.js";
 import Influencer from "../influencer/influencer.model.js";
 import Brand from "../brand/brand.model.js";
 import User from "./user.model.js";
+import logger from "../../utils/logger.js";
 
 
 
@@ -22,15 +23,15 @@ const getMe = AsyncHandler(async (req, res) => {
 
     // Force status to "active" when logging in or reloading the page
     await User.findByIdAndUpdate(userId, { status: "active", manualOffline: false });
-    console.log(`[GetMe] Fetching for UserID: ${userId}`);
+    logger.debug(`[GetMe] Fetching for UserID: ${userId}`);
     const user = await userService.getUserById(userId);
-    console.log(`[GetMe] Found User: ${user.email}, Onboarding: ${user.stripeOnboardingComplete}`);
+    logger.debug(`[GetMe] Found User: ${user.email}, Onboarding: ${user.stripeOnboardingComplete}`);
 
     let roleProfile = null;
     if (role === "influencer") {
         roleProfile = await Influencer.findOne({ user: userId }).lean();
         if (!roleProfile) {
-            console.log(`[UserController] Influencer profile missing for user ${userId}. Auto-creating...`);
+            logger.warn(`[UserController] Influencer profile missing for user ${userId}. Auto-creating...`);
             roleProfile = await Influencer.create({
                 user: userId,
                 username: user?.fullname?.toLowerCase().replace(/\s+/g, "") || `user${userId.toString().slice(-4)}`,
@@ -42,7 +43,7 @@ const getMe = AsyncHandler(async (req, res) => {
     if (role === "brand") {
         roleProfile = await Brand.findOne({ user: userId }).lean();
         if (!roleProfile) {
-            console.log(`[UserController] Brand profile missing for user ${userId}. Auto-creating...`);
+            logger.warn(`[UserController] Brand profile missing for user ${userId}. Auto-creating...`);
             roleProfile = await Brand.create({
                 user: userId,
                 brandname: user?.fullname || "My Brand",
@@ -163,6 +164,31 @@ const deactivateAccount = AsyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * Report a User (AI Behavioral Trigger)
+ */
+const reportUser = AsyncHandler(async (req, res) => {
+    const { targetId, reason } = req.body;
+    if (!targetId || !reason) throw new ApiError(400, "targetId and reason are required");
+
+    const targetUser = await User.findById(targetId);
+    if (!targetUser) throw new ApiError(404, "Target user not found");
+
+    // Emit event for AI Memory & Moderation tracking
+    const eventBus = (await import("../../events/eventBus.js")).default;
+    const { EVENTS } = await import("../../events/constants.js");
+    
+    eventBus.emit(EVENTS.USER.REPORTED, {
+        targetId,
+        reporterId: req.user._id,
+        reason
+    });
+
+    return res.status(200).json(
+        new ApiResponse(200, null, "User reported successfully. AI is investigating.")
+    );
+});
+
 export const userController = {
     getMe,
     getProfile,
@@ -170,4 +196,5 @@ export const userController = {
     updateStatus,
     deleteAccount,
     deactivateAccount,
+    reportUser
 };

@@ -3,6 +3,8 @@ import { AsyncHandler } from "../../utils/Asynchandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
+import { eventBus } from "../../events/eventBus.js";
+import { EVENTS } from "../../events/constants.js";
 
 const cookieOptions = {
     httpOnly: true,
@@ -36,6 +38,9 @@ const register = AsyncHandler(async (req, res) => {
 
     const user = await authService.register(userData);
 
+    // Emit event for background side effects (welcome email, activity log)
+    eventBus.emit(EVENTS.USER.REGISTERED, user);
+
     return res.status(validationStatus.created).json(
         new ApiResponse(validationStatus.created, user, "User registered successfully")
     );
@@ -48,6 +53,9 @@ const login = AsyncHandler(async (req, res) => {
     let { email, password } = req.body;
     if (email) email = email.toLowerCase().trim();
     const { user, accessToken, refreshToken } = await authService.login(email, password);
+
+    // Emit event for background side effects (analytics, last active update)
+    eventBus.emit(EVENTS.USER.LOGGED_IN, user);
 
     console.log(`[LoginSuccess] User: ${user.email}, ID: ${user._id}, Onboarding: ${user.stripeOnboardingComplete}`);
     return res
