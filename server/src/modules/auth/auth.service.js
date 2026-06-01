@@ -6,25 +6,24 @@ import crypto from 'crypto';
 import { sendEmail } from "../../utils/email.js";
 import Brand from "../brand/brand.model.js";
 import Influencer from "../influencer/influencer.model.js";
+import safeLogger from "../../utils/safeLogger.js";
+
 
 /**
  * Generate Access and Refresh Tokens
  */
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
-        console.log(`Finding user ${userId} for token generation`);
+        // Avoid logging user identifiers/tokens
         const user = await User.findById(userId);
         if (!user) throw new ApiError(validationStatus.notFound, "User not found");
 
-        console.log(`Generating access token for ${user.email}`);
         const accessToken = user.generateAccessToken();
-        console.log(`Generating refresh token for ${user.email}`);
         const refreshToken = user.generateRefreshToken();
 
         // Use a targeted update instead of user.save() to avoid Mongoose casting
         // the 'platforms' field on documents that don't have it yet, which causes
         // the MongoDB error: "Cannot create field 'youtube' in element {platforms: []}"
-        console.log(`Saving refresh token to database for ${user.email}`);
         await User.findByIdAndUpdate(
             userId,
             { $set: { refreshToken } },
@@ -32,6 +31,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
         );
 
         return { accessToken, refreshToken };
+
     } catch (error) {
         console.error("Error in generateAccessAndRefreshTokens:", error);
         
@@ -93,14 +93,9 @@ const register = async (userData) => {
  */
 const login = async (email, password) => {
     try {
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`Login attempt for email: ${email}`);
-        }
+        // Avoid logging user identifiers in auth flows
         const user = await User.findOne({ email });
         if (!user) {
-            if (process.env.NODE_ENV !== 'production') {
-                console.log(`User not found: ${email}`);
-            }
             throw new ApiError(validationStatus.notFound, "User does not exist");
         }
 
@@ -110,27 +105,20 @@ const login = async (email, password) => {
 
         const isPasswordValid = await user.isPasswordCorrect(password);
         if (!isPasswordValid) {
-            console.log(`Invalid password for user: ${email}`);
             throw new ApiError(validationStatus.unauthorized, "Invalid credentials");
         }
 
         // Auto-reactivate if account was deactivated
         if (user.isDeactivated) {
-            console.log(`Reactivating account for: ${email}`);
             user.isDeactivated = false;
             await user.save({ validateBeforeSave: false });
         }
 
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`Generating tokens for user: ${user._id}`);
-        }
         const tokens = await generateAccessAndRefreshTokens(user._id);
         const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`Login successful for user: ${email}`);
-        }
         return { user: loggedInUser, ...tokens };
+
     } catch (error) {
         console.error("Login Error:", error);
         throw error;
@@ -180,9 +168,8 @@ const forgotPassword = async (email) => {
     const otp = user.generatePasswordResetOTP();
     await user.save({ validateBeforeSave: false });
 
-    if (process.env.NODE_ENV !== 'production') {
-        console.log(`\n\n=== DEVELOPMENT OTP FOR ${user.email}: ${otp} ===\n\n`);
-    }
+    // Never print OTP/password reset codes to logs
+    safeLogger.info("Password reset OTP generated (dev-only; not logging OTP)");
 
     try {
         await sendEmail({
@@ -191,8 +178,10 @@ const forgotPassword = async (email) => {
             html: `<h2>Password Reset OTP</h2><h1>${otp}</h1><p>This OTP expires in 10 minutes.</p>`,
         });
     } catch (err) {
-        console.log("Email could not be sent (SMTP may not be configured). OTP printed in console.");
+        // Avoid logging OTP/user-specific data
+        safeLogger.warn("Password reset email could not be sent.");
     }
+
 };
 
 /**
@@ -251,9 +240,8 @@ const sendEmailVerificationOTP = async (userId) => {
     const otp = user.generateEmailVerificationOTP();
     await user.save({ validateBeforeSave: false });
 
-    if (process.env.NODE_ENV !== 'production') {
-        console.log(`\n\n=== EMAIL VERIFICATION OTP FOR ${user.email}: ${otp} ===\n\n`);
-    }
+    // Never print OTP/password reset codes to logs
+    safeLogger.info("Email verification OTP generated (dev-only; not logging OTP)");
 
     try {
         await sendEmail({
@@ -271,8 +259,10 @@ const sendEmailVerificationOTP = async (userId) => {
             `,
         });
     } catch (err) {
-        console.log("Email could not be sent (SMTP issues). OTP printed in console.");
+        // Avoid logging OTP/user-specific data
+        safeLogger.warn("Email verification email could not be sent.");
     }
+
 };
 
 /**
