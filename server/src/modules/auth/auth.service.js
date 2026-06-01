@@ -7,6 +7,7 @@ import { sendEmail } from "../../utils/email.js";
 import Brand from "../brand/brand.model.js";
 import Influencer from "../influencer/influencer.model.js";
 import logger from "../../utils/logger.js";
+import { otpRedis } from '../../utils/otpRedisService.js';
 
 /**
  * Generate Access and Refresh Tokens
@@ -167,8 +168,42 @@ const forgotPassword = async (email) => {
     const user = await User.findOne({ email });
     if (!user) return; // Silent return for security
 
-    const otp = user.generatePasswordResetOTP();
-    await user.save({ validateBeforeSave: false });
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOTP = crypto.createHash("sha256").update(otp).digest('hex');
+
+    let redisFailed = false;
+
+    try {
+        const isLocked = await otpRedis.checkLockout('pwd-reset', email);
+        if (isLocked) {
+            throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+        }
+
+        const isCooling = await otpRedis.checkCooldown('pwd-reset', email);
+        if (isCooling) {
+            throw new ApiError(validationStatus.tooManyRequests, "Please wait 60 seconds before requesting another OTP.");
+        }
+
+        const dailyLimit = await otpRedis.checkAndIncrementDailyLimit('pwd-reset', email, 5);
+        if (!dailyLimit.allowed) {
+            throw new ApiError(validationStatus.tooManyRequests, "Daily OTP request limit reached (5 per day). Please try again tomorrow.");
+        }
+
+        await otpRedis.storeOTP('pwd-reset', email, hashedOTP, 600, 60);
+    } catch (err) {
+        if (err instanceof ApiError) {
+            throw err;
+        }
+        logger.error("[Redis Outage] Falling back to MongoDB emergency OTP storage:", err);
+        redisFailed = true;
+    }
+
+    if (redisFailed) {
+        user.passwordResetOTP = hashedOTP;
+        user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+        user.passwordResetAttempts = 0;
+        await user.save({ validateBeforeSave: false });
+    }
 
     if (process.env.NODE_ENV !== 'production') {
         console.log(`\n\n=== DEVELOPMENT OTP FOR ${user.email}: ${otp} ===\n\n`);
@@ -181,7 +216,7 @@ const forgotPassword = async (email) => {
             html: `<h2>Password Reset OTP</h2><h1>${otp}</h1><p>This OTP expires in 10 minutes.</p>`,
         });
     } catch (err) {
-        console.log("Email could not be sent (SMTP may not be configured). OTP printed in console.");
+        logger.error("Email could not be sent (SMTP issues).", err);
     }
 };
 
@@ -190,27 +225,79 @@ const forgotPassword = async (email) => {
  */
 const resetPassword = async (email, otp, newPassword) => {
     const user = await User.findOne({ email });
-    if (!user || user.passwordResetExpires < Date.now()) {
+    if (!user) {
         throw new ApiError(validationStatus.badRequest, "Invalid request or OTP expired");
     }
 
-    if (user.passwordResetAttempts >= 5) {
-        throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Request new OTP.");
-    }
-
     const hashedOTP = crypto.createHash("sha256").update(otp).digest('hex');
-    if (hashedOTP !== user.passwordResetOTP) {
-        user.passwordResetAttempts += 1;
-        await user.save({ validateBeforeSave: false });
-        throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+    let verified = false;
+    let redisFailed = false;
+
+    try {
+        const isLocked = await otpRedis.checkLockout('pwd-reset', email);
+        if (isLocked) {
+            throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+        }
+
+        const verifyResult = await otpRedis.verifyOTP('pwd-reset', email, hashedOTP, 3, 3600);
+
+        if (verifyResult === 1) {
+            verified = true;
+        } else if (verifyResult === 0) {
+            throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+        } else if (verifyResult === -1) {
+            throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+        } else if (verifyResult === -2) {
+            if (user.passwordResetExpires && user.passwordResetExpires >= Date.now()) {
+                if (user.passwordResetAttempts >= 3) {
+                    throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+                }
+                if (user.passwordResetOTP === hashedOTP) {
+                    verified = true;
+                    user.passwordResetOTP = undefined;
+                    user.passwordResetExpires = undefined;
+                    user.passwordResetAttempts = undefined;
+                } else {
+                    user.passwordResetAttempts += 1;
+                    await user.save({ validateBeforeSave: false });
+                    throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+                }
+            } else {
+                throw new ApiError(validationStatus.badRequest, "Invalid request or OTP expired");
+            }
+        }
+    } catch (err) {
+        if (err instanceof ApiError) {
+            throw err;
+        }
+        logger.error("[Redis Outage] Falling back to MongoDB emergency OTP validation:", err);
+        redisFailed = true;
     }
 
-    user.password = newPassword;
-    user.passwordResetOTP = undefined;
-    user.passwordResetExpires = undefined;
-    user.passwordResetAttempts = undefined;
-    user.refreshToken = undefined;
-    await user.save();
+    if (redisFailed) {
+        if (!user.passwordResetExpires || user.passwordResetExpires < Date.now()) {
+            throw new ApiError(validationStatus.badRequest, "Invalid request or OTP expired");
+        }
+        if (user.passwordResetAttempts >= 3) {
+            throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+        }
+        if (user.passwordResetOTP !== hashedOTP) {
+            user.passwordResetAttempts += 1;
+            await user.save({ validateBeforeSave: false });
+            throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+        }
+
+        verified = true;
+        user.passwordResetOTP = undefined;
+        user.passwordResetExpires = undefined;
+        user.passwordResetAttempts = undefined;
+    }
+
+    if (verified) {
+        user.password = newPassword;
+        user.refreshToken = undefined;
+        await user.save();
+    }
 };
 
 /**
@@ -238,8 +325,41 @@ const sendEmailVerificationOTP = async (userId) => {
     const user = await User.findById(userId);
     if (!user) throw new ApiError(validationStatus.notFound, "User not found");
 
-    const otp = user.generateEmailVerificationOTP();
-    await user.save({ validateBeforeSave: false });
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOTP = crypto.createHash("sha256").update(otp).digest('hex');
+
+    let redisFailed = false;
+
+    try {
+        const isLocked = await otpRedis.checkLockout('email-verify', userId);
+        if (isLocked) {
+            throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+        }
+
+        const isCooling = await otpRedis.checkCooldown('email-verify', userId);
+        if (isCooling) {
+            throw new ApiError(validationStatus.tooManyRequests, "Please wait 60 seconds before requesting another OTP.");
+        }
+
+        const dailyLimit = await otpRedis.checkAndIncrementDailyLimit('email-verify', userId, 5);
+        if (!dailyLimit.allowed) {
+            throw new ApiError(validationStatus.tooManyRequests, "Daily OTP request limit reached (5 per day). Please try again tomorrow.");
+        }
+
+        await otpRedis.storeOTP('email-verify', userId, hashedOTP, 300, 60);
+    } catch (err) {
+        if (err instanceof ApiError) {
+            throw err;
+        }
+        logger.error("[Redis Outage] Falling back to MongoDB emergency email verification OTP storage:", err);
+        redisFailed = true;
+    }
+
+    if (redisFailed) {
+        user.emailVerificationOTP = hashedOTP;
+        user.emailVerificationOTPExpires = Date.now() + 5 * 60 * 1000;
+        await user.save({ validateBeforeSave: false });
+    }
 
     if (process.env.NODE_ENV !== 'production') {
         console.log(`\n\n=== EMAIL VERIFICATION OTP FOR ${user.email}: ${otp} ===\n\n`);
@@ -250,7 +370,7 @@ const sendEmailVerificationOTP = async (userId) => {
             to: user.email,
             subject: "Verify Your Email - Brandly",
             html: `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; rounded: 16px;">
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 16px;">
                     <h2 style="color: #111827; font-weight: 800;">Verify Your Email</h2>
                     <p style="color: #4b5563;">Use the following OTP to verify your email address. This code expires in 5 minutes.</p>
                     <div style="background: #f3f4f6; padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">
@@ -261,7 +381,7 @@ const sendEmailVerificationOTP = async (userId) => {
             `,
         });
     } catch (err) {
-        console.log("Email could not be sent (SMTP issues). OTP printed in console.");
+        logger.error("Email could not be sent (SMTP issues).", err);
     }
 };
 
@@ -272,19 +392,62 @@ const verifyEmailVerificationOTP = async (userId, otp) => {
     const user = await User.findById(userId);
     if (!user) throw new ApiError(validationStatus.notFound, "User not found");
 
-    if (!user.emailVerificationOTPExpires || user.emailVerificationOTPExpires < Date.now()) {
-        throw new ApiError(validationStatus.badRequest, "OTP expired. Please request a new one.");
-    }
-
     const hashedOTP = crypto.createHash("sha256").update(otp).digest('hex');
-    if (hashedOTP !== user.emailVerificationOTP) {
-        throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+    let verified = false;
+    let redisFailed = false;
+
+    try {
+        const isLocked = await otpRedis.checkLockout('email-verify', userId);
+        if (isLocked) {
+            throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+        }
+
+        const verifyResult = await otpRedis.verifyOTP('email-verify', userId, hashedOTP, 3, 3600);
+
+        if (verifyResult === 1) {
+            verified = true;
+        } else if (verifyResult === 0) {
+            throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+        } else if (verifyResult === -1) {
+            throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+        } else if (verifyResult === -2) {
+            if (user.emailVerificationOTPExpires && user.emailVerificationOTPExpires >= Date.now()) {
+                if (user.emailVerificationOTP === hashedOTP) {
+                    verified = true;
+                    user.emailVerificationOTP = undefined;
+                    user.emailVerificationOTPExpires = undefined;
+                } else {
+                    throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+                }
+            } else {
+                throw new ApiError(validationStatus.badRequest, "OTP expired. Please request a new one.");
+            }
+        }
+    } catch (err) {
+        if (err instanceof ApiError) {
+            throw err;
+        }
+        logger.error("[Redis Outage] Falling back to MongoDB emergency email verification OTP validation:", err);
+        redisFailed = true;
     }
 
-    user.isVerified = true;
-    user.emailVerificationOTP = undefined;
-    user.emailVerificationOTPExpires = undefined;
-    await user.save({ validateBeforeSave: false });
+    if (redisFailed) {
+        if (!user.emailVerificationOTPExpires || user.emailVerificationOTPExpires < Date.now()) {
+            throw new ApiError(validationStatus.badRequest, "OTP expired. Please request a new one.");
+        }
+        if (user.emailVerificationOTP !== hashedOTP) {
+            throw new ApiError(validationStatus.badRequest, "Invalid OTP");
+        }
+
+        verified = true;
+        user.emailVerificationOTP = undefined;
+        user.emailVerificationOTPExpires = undefined;
+    }
+
+    if (verified) {
+        user.isVerified = true;
+        await user.save({ validateBeforeSave: false });
+    }
 
     return user;
 };
