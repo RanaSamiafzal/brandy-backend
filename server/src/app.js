@@ -25,6 +25,8 @@ import rateLimit from 'express-rate-limit';
 import { stripeController } from './modules/payment/stripe.controller.js'
 import compression from 'compression';
 import { errorMiddleware } from './middleware/errorMiddleware.js';
+import cacheService from './utils/cacheService.js';
+import { getOrSetCache } from './utils/cacheHelpers.js';
 
 const app = express()
 
@@ -207,6 +209,25 @@ app.get("/", (req, res) => {
 console.log("🚀 Server starting...");
 console.log("📌 Webhook route registered");
 console.log("📌 Base API URL:", process.env.BASE_URL);
+
+
+app.get("/cache-test", async (req, res) => {
+    await cacheService.set(
+        "test-key",
+        {
+            name: "Brandly",
+            cache: true,
+        },
+        60
+    );
+
+    const data =
+        await cacheService.get(
+            "test-key"
+        );
+
+    return res.json(data);
+});
 
 
 // routes declaration
