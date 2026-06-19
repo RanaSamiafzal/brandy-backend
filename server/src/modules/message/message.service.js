@@ -85,7 +85,7 @@ const createConversation = async (senderId, receiverId, campaignId = null, colla
         query.campaign = campaignId;
     }
 
-    let conversation = await Conversation.findOne(query);
+    let conversation = await Conversation.findOne(query).populate("participants", "fullname email profilePic role status lastActive verifiedPlatforms");
 
     if (!conversation) {
         conversation = await Conversation.create({
@@ -100,7 +100,9 @@ const createConversation = async (senderId, receiverId, campaignId = null, colla
         await conversation.save();
     }
 
-    return conversation;
+    // Populate after create/save just to ensure participants are populated correctly
+    // if it was newly created
+    return await conversation.populate("participants", "fullname email profilePic role status lastActive verifiedPlatforms");
 };
 
 const sendMessage = async (conversationId, senderId, text, attachmentUrl = "", attachmentType = "", replyTo = null) => {

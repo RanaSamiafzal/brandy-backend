@@ -26,7 +26,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
         logger.debug(`Saving refresh token to database for ${user.email}`);
         await User.findByIdAndUpdate(
             userId,
-            { $set: { refreshToken } },
+            { $push: { refreshTokens: refreshToken } },
             { new: true }
         );
 
@@ -56,7 +56,7 @@ const register = async (userData) => {
     }
 
     const newUser = await User.create(userData);
-    const safeUser = await User.findById(newUser._id).select("-password -refreshToken");
+    const safeUser = await User.findById(newUser._id).select("-password -refreshTokens");
 
     if (!safeUser) {
         throw new ApiError(validationStatus.internalError, "Error registering the user");
@@ -118,7 +118,7 @@ const login = async (email, password) => {
 
         logger.debug(`Generating tokens for user: ${user._id}`);
         const tokens = await generateAccessAndRefreshTokens(user._id);
-        const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+        const loggedInUser = await User.findById(user._id).select("-password -refreshTokens");
 
         logger.info(`Login successful for user: ${email}`);
         return { user: loggedInUser, ...tokens };
@@ -131,12 +131,22 @@ const login = async (email, password) => {
 /**
  * Logout user
  */
-const logout = async (userId) => {
-    await User.findByIdAndUpdate(
-        userId,
-        { $unset: { refreshToken: 1 } },
-        { new: true }
-    );
+const logout = async (userId, refreshToken) => {
+    if (refreshToken) {
+        // Remove specific refresh token
+        await User.findByIdAndUpdate(
+            userId,
+            { $pull: { refreshTokens: refreshToken } },
+            { new: true }
+        );
+    } else {
+        // Fallback: remove all tokens if no specific token provided
+        await User.findByIdAndUpdate(
+            userId,
+            { $set: { refreshTokens: [] } },
+            { new: true }
+        );
+    }
 };
 
 /**
@@ -150,11 +160,20 @@ const refreshAccessToken = async (incomingRefreshToken) => {
         );
 
         const user = await User.findById(decodedToken?._id);
-        if (!user || incomingRefreshToken !== user.refreshToken) {
+        if (!user || !user.refreshTokens.includes(incomingRefreshToken)) {
             throw new ApiError(validationStatus.unauthorized, "Invalid or expired refresh token");
         }
 
+        // Generate new tokens
         const tokens = await generateAccessAndRefreshTokens(user._id);
+
+        // Remove the old incoming refresh token from the array
+        await User.findByIdAndUpdate(
+            user._id,
+            { $pull: { refreshTokens: incomingRefreshToken } },
+            { new: true }
+        );
+
         return tokens;
     } catch (error) {
         throw new ApiError(validationStatus.unauthorized, error.message || "Invalid refresh token");
@@ -295,7 +314,7 @@ const resetPassword = async (email, otp, newPassword) => {
 
     if (verified) {
         user.password = newPassword;
-        user.refreshToken = undefined;
+        user.refreshTokens = [];
         await user.save();
     }
 };

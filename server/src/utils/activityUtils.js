@@ -32,6 +32,7 @@ const emitActivity = async ({ user, role, type, title, description, relatedId = 
         // 3. Emit real-time socket events
         const userId = user?.toString();
         if (userId) {
+            console.log(`🔔 emitActivity: Emitting notification_received to user ${userId}, title: "${title}"`);
             socketManager.emitToUser(userId, "notification_received", {
                 _id: notification._id,
                 title,

@@ -1,10 +1,14 @@
 import Notification from "./notification.model.js";
 
 const getUserNotifications = async (userId, limit = 20) => {
-    return await Notification.find({ user: userId })
+    const notifications = await Notification.find({ user: userId })
         .sort({ createdAt: -1 })
         .limit(limit)
         .lean();
+        
+    const unreadCount = await Notification.countDocuments({ user: userId, isRead: false });
+    
+    return { notifications, unreadCount };
 };
 
 const markAsRead = async (notificationId, userId) => {

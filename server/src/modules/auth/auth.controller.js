@@ -76,7 +76,9 @@ const login = AsyncHandler(async (req, res) => {
  */
 const logout = AsyncHandler(async (req, res) => {
     const userId = req.user?._id;
-    await authService.logout(userId);
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    
+    await authService.logout(userId, refreshToken);
 
     return res
         .status(validationStatus.ok)
