@@ -1,5 +1,6 @@
 import { authService } from "./auth.service.js";
 import { AsyncHandler } from "../../utils/Asynchandler.js";
+import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
@@ -114,6 +115,18 @@ const forgotPassword = AsyncHandler(async (req, res) => {
 });
 
 /**
+ * Verify Reset OTP (standalone — no password change)
+ */
+const verifyResetOtp = AsyncHandler(async (req, res) => {
+    let { email, otp } = req.body;
+    if (email) email = email.toLowerCase().trim();
+    await authService.verifyResetOtp(email, otp);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, {}, "OTP verified successfully")
+    );
+});
+
+/**
  * Handle password reset
  */
 const resetPassword = AsyncHandler(async (req, res) => {
@@ -204,6 +217,7 @@ export const authController = {
     logout,
     refresh,
     forgotPassword,
+    verifyResetOtp,
     resetPassword,
     changePassword,
     sendOTP,

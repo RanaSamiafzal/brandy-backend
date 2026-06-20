@@ -168,6 +168,7 @@ UserSchema.virtual('isProfileVerified').get(function () {
 UserSchema.pre("save", function (next) {
     if (Array.isArray(this.platforms)) {
         this.platforms = {};
+        this.markModified('platforms');
     }
     
     // Clean up invalid verifiedPlatforms to avoid validation errors

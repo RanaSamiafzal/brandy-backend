@@ -62,7 +62,7 @@ const sendRequest = async (senderId, { receiverId, campaignId, proposedBudget, n
     });
 
     // Emit activity for the receiver
-    const receiverUser = await User.findById(request.receiver).select('role');
+    const receiverUser = await User.findById(targetReceiverId).select('role');
     const campaign = await Campaign.findById(request.campaign).select('name');
 
     await emitActivity({

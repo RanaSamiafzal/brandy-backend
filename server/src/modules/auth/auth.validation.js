@@ -26,11 +26,17 @@ const resetPasswordSchema = Joi.object({
     password: Joi.string().required().min(6),
 });
 
+const verifyResetOtpSchema = Joi.object({
+    email: Joi.string().email().required().trim().lowercase(),
+    otp: Joi.string().required().length(6),
+});
+
 export const authValidation = {
     registerSchema,
     loginSchema,
     refreshSchema,
     forgotPasswordSchema,
+    verifyResetOtpSchema,
     resetPasswordSchema,
     changePasswordSchema: Joi.object({
         oldPassword: Joi.string().required(),

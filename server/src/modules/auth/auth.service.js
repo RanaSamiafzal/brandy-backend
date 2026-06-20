@@ -3,6 +3,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { sendEmail } from "../../utils/email.js";
 import Brand from "../brand/brand.model.js";
 import Influencer from "../influencer/influencer.model.js";
@@ -218,10 +219,21 @@ const forgotPassword = async (email) => {
     }
 
     if (redisFailed) {
-        user.passwordResetOTP = hashedOTP;
-        user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
-        user.passwordResetAttempts = 0;
-        await user.save({ validateBeforeSave: false });
+        try {
+            await User.updateOne(
+                { _id: user._id },
+                {
+                    $set: {
+                        passwordResetOTP: hashedOTP,
+                        passwordResetExpires: new Date(Date.now() + 10 * 60 * 1000),
+                        passwordResetAttempts: 0,
+                    }
+                }
+            );
+        } catch (saveErr) {
+            logger.error("[forgotPassword] MongoDB fallback save failed:", saveErr);
+            throw new ApiError(validationStatus.internalError, "Failed to process request. Please try again.");
+        }
     }
 
     if (process.env.NODE_ENV !== 'production') {
@@ -242,15 +254,13 @@ const forgotPassword = async (email) => {
 /**
  * Reset password
  */
-const resetPassword = async (email, otp, newPassword) => {
+const _verifyResetOtp = async (email, otp) => {
     const user = await User.findOne({ email });
     if (!user) {
         throw new ApiError(validationStatus.badRequest, "Invalid request or OTP expired");
     }
 
     const hashedOTP = crypto.createHash("sha256").update(otp).digest('hex');
-    let verified = false;
-    let redisFailed = false;
 
     try {
         const isLocked = await otpRedis.checkLockout('pwd-reset', email);
@@ -261,7 +271,7 @@ const resetPassword = async (email, otp, newPassword) => {
         const verifyResult = await otpRedis.verifyOTP('pwd-reset', email, hashedOTP, 3, 3600);
 
         if (verifyResult === 1) {
-            verified = true;
+            return;
         } else if (verifyResult === 0) {
             throw new ApiError(validationStatus.badRequest, "Invalid OTP");
         } else if (verifyResult === -1) {
@@ -272,13 +282,13 @@ const resetPassword = async (email, otp, newPassword) => {
                     throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
                 }
                 if (user.passwordResetOTP === hashedOTP) {
-                    verified = true;
                     user.passwordResetOTP = undefined;
                     user.passwordResetExpires = undefined;
                     user.passwordResetAttempts = undefined;
+                    return;
                 } else {
                     user.passwordResetAttempts += 1;
-                    await user.save({ validateBeforeSave: false });
+                    await User.updateOne({ _id: user._id }, { $inc: { passwordResetAttempts: 1 } });
                     throw new ApiError(validationStatus.badRequest, "Invalid OTP");
                 }
             } else {
@@ -290,32 +300,65 @@ const resetPassword = async (email, otp, newPassword) => {
             throw err;
         }
         logger.error("[Redis Outage] Falling back to MongoDB emergency OTP validation:", err);
-        redisFailed = true;
+        _verifyResetOtpMongoFallback(user, hashedOTP);
+    }
+};
+
+const _verifyResetOtpMongoFallback = (user, hashedOTP) => {
+    if (!user.passwordResetExpires || user.passwordResetExpires < Date.now()) {
+        throw new ApiError(validationStatus.badRequest, "Invalid request or OTP expired");
+    }
+    if (user.passwordResetAttempts >= 3) {
+        throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
+    }
+    if (user.passwordResetOTP !== hashedOTP) {
+        user.passwordResetAttempts += 1;
+        throw new ApiError(validationStatus.badRequest, "Invalid OTP");
     }
 
-    if (redisFailed) {
-        if (!user.passwordResetExpires || user.passwordResetExpires < Date.now()) {
+    user.passwordResetOTP = undefined;
+    user.passwordResetExpires = undefined;
+    user.passwordResetAttempts = undefined;
+};
+
+const verifyResetOtp = async (email, otp) => {
+    try {
+        await _verifyResetOtp(email, otp);
+    } catch (err) {
+        if (err instanceof ApiError) {
+            throw err;
+        }
+        logger.error("[verifyResetOtp] Unexpected error:", err);
+        if (err.code === 'ERR_HTTP_HEADERS_SENT') {
+            throw new ApiError(validationStatus.internalError, "Internal server error");
+        }
+        throw new ApiError(validationStatus.internalError, err.message || "Internal server error");
+    }
+};
+
+const resetPassword = async (email, otp, newPassword) => {
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
             throw new ApiError(validationStatus.badRequest, "Invalid request or OTP expired");
         }
-        if (user.passwordResetAttempts >= 3) {
-            throw new ApiError(validationStatus.tooManyRequests, "Too many attempts. Try again in 1 hour.");
-        }
-        if (user.passwordResetOTP !== hashedOTP) {
-            user.passwordResetAttempts += 1;
-            await user.save({ validateBeforeSave: false });
-            throw new ApiError(validationStatus.badRequest, "Invalid OTP");
-        }
 
-        verified = true;
-        user.passwordResetOTP = undefined;
-        user.passwordResetExpires = undefined;
-        user.passwordResetAttempts = undefined;
-    }
+        await _verifyResetOtp(email, otp);
 
-    if (verified) {
-        user.password = newPassword;
-        user.refreshTokens = [];
-        await user.save();
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await User.findByIdAndUpdate(user._id, {
+            password: hashedPassword,
+            refreshTokens: [],
+            passwordResetOTP: undefined,
+            passwordResetExpires: undefined,
+            passwordResetAttempts: undefined,
+        });
+    } catch (err) {
+        if (err instanceof ApiError) {
+            throw err;
+        }
+        logger.error("[resetPassword] Unexpected error:", err);
+        throw new ApiError(validationStatus.internalError, err.message || "Internal server error");
     }
 };
 
@@ -564,6 +607,7 @@ export const authService = {
     changePassword,
     sendEmailVerificationOTP,
     verifyEmailVerificationOTP,
+    verifyResetOtp,
     getFacebookAuthUrl,
     handleFacebookCallback,
 };

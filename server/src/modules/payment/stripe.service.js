@@ -127,6 +127,16 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
         throw new ApiError(validationStatus.badRequest, `Escrow for this collaboration is already funded`);
     }
 
+    // Auto-fix: If agreedBudget is 0 but proposedBudget or campaign budget exists, use it
+    // MUST run BEFORE amount calculation to avoid stale values
+    if (!collaboration.agreedBudget || collaboration.agreedBudget === 0) {
+        const fallbackBudget = collaboration.proposedBudget || collaboration.campaign?.budget?.min || 0;
+        if (fallbackBudget > 0) {
+            collaboration.agreedBudget = fallbackBudget;
+            await collaboration.save();
+        }
+    }
+
     // --- REUSE LOGIC ---
     // If we already have a PaymentIntent ID, check its status on Stripe
     // IMPORTANT: Only reuse if the amount matches!
@@ -167,15 +177,6 @@ export const createEscrowPaymentIntent = async (collaborationId, brandId) => {
         });
         await User.findByIdAndUpdate(brandId, { $set: { stripeCustomerId: customer.id } });
         user.stripeCustomerId = customer.id;
-    }
-
-    // Auto-fix: If agreedBudget is 0 but proposedBudget or campaign budget exists, use it
-    if (!collaboration.agreedBudget || collaboration.agreedBudget === 0) {
-        const fallbackBudget = collaboration.proposedBudget || collaboration.campaign?.budget?.min || 0;
-        if (fallbackBudget > 0) {
-            collaboration.agreedBudget = fallbackBudget;
-            await collaboration.save();
-        }
     }
 
     // Budget validation for Stripe (minimum $0.50)

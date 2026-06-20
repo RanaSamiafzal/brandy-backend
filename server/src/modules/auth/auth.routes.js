@@ -27,6 +27,8 @@ router.post("/refresh-token", validate(authValidation.refreshSchema), authContro
 
 router.post("/forgot-password", validate(authValidation.forgotPasswordSchema), authController.forgotPassword);
 
+router.post("/verify-reset-otp", validate(authValidation.verifyResetOtpSchema), authController.verifyResetOtp);
+
 router.post("/reset-password", validate(authValidation.resetPasswordSchema), authController.resetPassword);
 
 router.post("/change-password", verifyJwt, validate(authValidation.changePasswordSchema), authController.changePassword);

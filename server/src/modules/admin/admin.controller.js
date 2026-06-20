@@ -320,7 +320,10 @@ const approveAction = AsyncHandler(async (req, res) => {
   if (!token) throw new ApiError(validationStatus.badRequest, 'Token is required');
 
   try {
-    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET || 'fallback_secret');
+    if (!process.env.ACCESS_TOKEN_SECRET) {
+      throw new ApiError(validationStatus.internalError, 'Server configuration error');
+    }
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     const { actionType, userId, reason } = decoded;
 
     if (action === 'reject') {
