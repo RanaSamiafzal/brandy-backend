@@ -297,7 +297,18 @@ const acceptRequest = async (requestId, userId) => {
 
         const campaignId = collaboration.campaign;
         const campaign = await Campaign.findById(campaignId).session(session);
-        if (campaign.selectedInfluencer) throw new ApiError(validationStatus.badRequest, "Campaign already has a selected influencer");
+        
+        // Check if campaign already has an active/accepted collaboration (more robust than selectedInfluencer check)
+        const activeCollab = await Collaboration.findOne({
+            campaign: campaignId,
+            _id: { $ne: requestId },
+            status: { $in: ['awaiting_funds', 'awaiting_onboarding', 'active', 'in_progress', 'review'] },
+            isDeleted: false
+        }).session(session);
+        
+        if (activeCollab || campaign.selectedInfluencer) {
+            throw new ApiError(validationStatus.badRequest, "Campaign already has a selected influencer");
+        }
 
         // 1. Accept this request -> awaiting_funds
         collaboration.status = "awaiting_funds";

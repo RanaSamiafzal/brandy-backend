@@ -283,6 +283,7 @@ const getAllCampaigns = async ({
   const matchStage = { 
     isDeleted: false, 
     status: "active",
+    selectedInfluencer: null, // Hide campaigns that already have a selected influencer
     "campaignTimeline.endDate": { $gte: new Date() } // Only show campaigns that haven't expired
   };
   if (industry) matchStage.industry = { $regex: industry, $options: "i" };
