@@ -1,28 +1,18 @@
 import Redis from 'ioredis';
 import logger from '../utils/logger.js';
 
-// const redisConfig = {
-//     host: process.env.REDIS_HOST || '127.0.0.1',
-//     port: process.env.REDIS_PORT || 6379,
-//     password: process.env.REDIS_PASSWORD || undefined,
-//     maxRetriesPerRequest: null, // Required by BullMQ
-// };
+const isProduction = process.env.REDIS_HOST && process.env.REDIS_HOST !== '127.0.0.1' && process.env.REDIS_HOST !== 'localhost';
 
 const redisConfig = {
     host: process.env.REDIS_HOST || '127.0.0.1',
     port: process.env.REDIS_PORT || 6379,
     password: process.env.REDIS_PASSWORD || undefined,
     maxRetriesPerRequest: null, // Required by BullMQ
-
-    maxRetriesPerRequest: null, // Required by BullMQ
-
     lazyConnect: true, // It will not connect until the first command is sent.
-
     connectTimeout: 5000, // Connection will time out after 5 seconds.
-
     enableReadyCheck: true, // check if redis is ready or not before using it
-
     enableOfflineQueue: false, // Do not queue commands when connection is down (fail-open instead of hang)
+    ...(isProduction && { tls: {} }), // Upstash requires TLS
 };
 
 
