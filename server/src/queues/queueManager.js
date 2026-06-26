@@ -24,6 +24,12 @@ export const getQueue = (queueName) => {
                 removeOnFail: false,
             }
         });
+        queues[queueName].on('error', (err) => {
+            // Suppress verbose ECONNRESET errors if desired, or just log them
+            if (err.code !== 'ECONNRESET') {
+                logger.error(`[Queue][${queueName}] Error:`, err.message);
+            }
+        });
         
         logger.info(`Initialized Queue: ${queueName}`);
     }

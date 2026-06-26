@@ -2,14 +2,10 @@ import { Queue, Worker } from 'bullmq';
 import Redis from 'ioredis';
 import Message from '../modules/message/message.model.js';
 
-// Setup Redis connection for BullMQ
-const redisConnection = new Redis(process.env.REDIS_HOST || '127.0.0.1', {
-  port: process.env.REDIS_PORT || 6379,
-  maxRetriesPerRequest: null,
-});
+import { getSharedConnection } from '../config/redis.js';
 
 export const moderationQueue = new Queue('moderation-scan-queue', {
-  connection: redisConnection,
+  connection: getSharedConnection(),
 });
 
 const ABUSE_KEYWORDS = [
@@ -53,12 +49,18 @@ const moderationWorker = new Worker('moderation-scan-queue', async (job) => {
     
     return { scanned: messages.length, flaggedCount: flagged.length };
   }
-}, { connection: redisConnection });
+}, { connection: getSharedConnection() });
 
 moderationWorker.on('completed', (job) => {
   console.log(`Job with id ${job.id} has been completed`);
 });
 
 moderationWorker.on('failed', (job, err) => {
-  console.error(`Job with id ${job.id} has failed with ${err.message}`);
+  console.error(`Job with id ${job?.id} has failed with ${err.message}`);
+});
+
+moderationWorker.on('error', (err) => {
+  if (err.code !== 'ECONNRESET' && err.code !== 'ENOTFOUND') {
+    console.error(`[Worker][moderation-scan-queue] Error:`, err.message);
+  }
 });

@@ -343,7 +343,9 @@ const resetPassword = async (email, otp, newPassword) => {
             throw new ApiError(validationStatus.badRequest, "Invalid request or OTP expired");
         }
 
-        await _verifyResetOtp(email, otp);
+        // OTP was already verified and consumed in the /verify-reset-otp step.
+        // Do NOT call _verifyResetOtp again here — it would fail because
+        // the OTP is deleted from Redis after first verification.
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await User.findByIdAndUpdate(user._id, {

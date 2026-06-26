@@ -31,7 +31,13 @@ export const createWorker = (queueName, processor) => {
     });
 
     worker.on('failed', (job, err) => {
-        logger.error(`[Worker][${queueName}] Job ${job.id} failed permanently:`, err);
+        logger.error(`[Worker][${queueName}] Job ${job?.id} failed permanently:`, err.message);
+    });
+
+    worker.on('error', (err) => {
+        if (err.code !== 'ECONNRESET') {
+            logger.error(`[Worker][${queueName}] Error:`, err.message);
+        }
     });
 
     workers.push(worker);

@@ -17,17 +17,36 @@ const redisConfig = {
 
 
 let redisConnection = null;
+let sharedConnection = null;
+
+// Fallback logic
+const handleRedisErrorFallback = (client, err, connectionName) => {
+    if (err.code !== 'ECONNRESET' && err.code !== 'ENOTFOUND') {
+        logger.error(`❌ ${connectionName} Error:`, err.message);
+    }
+
+    // If the error is a connection drop/failure and we are currently trying to connect to a remote host
+    if ((err.code === 'ENOTFOUND' || err.code === 'ECONNRESET') && client.options.host !== '127.0.0.1') {
+        logger.warn(`⚠️ Cloud Redis failed (${err.code}). Falling back to local Redis (127.0.0.1:6379) for ${connectionName}...`);
+
+        // Mutate the options so the next reconnect attempt uses local Redis
+        client.options.host = '127.0.0.1';
+        client.options.port = 6379;
+        delete client.options.password;
+        delete client.options.tls;
+    }
+};
 
 export const getRedisConnection = () => {
     if (!redisConnection) {
         redisConnection = new Redis(redisConfig);
-        
+
         redisConnection.on('connect', () => {
             logger.info('✅ Redis connected successfully');
         });
 
         redisConnection.on('error', (err) => {
-            logger.error('❌ Redis Connection Error:', err);
+            handleRedisErrorFallback(redisConnection, err, 'Main Redis');
         });
 
         redisConnection.on("reconnecting", () => {
@@ -37,26 +56,52 @@ export const getRedisConnection = () => {
     return redisConnection;
 };
 
-let sharedConnection = null;
-
 export const getSharedConnection = () => {
     if (!sharedConnection) {
         sharedConnection = new Redis(redisConfig);
-        sharedConnection.on('error', (err) => logger.error('Shared Redis Error:', err));
+        sharedConnection.on('error', (err) => {
+            handleRedisErrorFallback(sharedConnection, err, 'Shared Redis');
+        });
+
+        // BullMQ uses .duplicate() to create blocking connections.
+        // We override duplicate to ensure we attach an error handler to the new connections.
+        const originalDuplicate = sharedConnection.duplicate.bind(sharedConnection);
+        sharedConnection.duplicate = (...args) => {
+            const duplicateConnection = originalDuplicate(...args);
+            duplicateConnection.on('error', (err) => {
+                handleRedisErrorFallback(duplicateConnection, err, 'Duplicated BullMQ Redis');
+            });
+            return duplicateConnection;
+        };
     }
     return sharedConnection;
 };
 
 export const closeRedis = async () => {
     logger.info('Closing Redis connections...');
-    if (redisConnection) await redisConnection.quit();
-    if (sharedConnection) await sharedConnection.quit();
+    try {
+        if (redisConnection && redisConnection.status !== 'end') {
+            await redisConnection.quit();
+        }
+    } catch (err) {
+        logger.warn('Warning closing redisConnection:', err.message);
+        if (redisConnection) redisConnection.disconnect();
+    }
+
+    try {
+        if (sharedConnection && sharedConnection.status !== 'end') {
+            await sharedConnection.quit();
+        }
+    } catch (err) {
+        logger.warn('Warning closing sharedConnection:', err.message);
+        if (sharedConnection) sharedConnection.disconnect();
+    }
     logger.info('Redis connections closed.');
 };
 
 
 export const isRedisReady = () => {
-  return redisConnection?.status === "ready";
+    return redisConnection?.status === "ready";
 };
 
 
