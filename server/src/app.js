@@ -25,8 +25,9 @@ import rateLimit from 'express-rate-limit';
 import { stripeController } from './modules/payment/stripe.controller.js'
 import compression from 'compression';
 import { errorMiddleware } from './middleware/errorMiddleware.js';
-import cacheService from './utils/cacheService.js';
-import { getOrSetCache } from './utils/cacheHelpers.js';
+// Cache imports available if needed
+// import cacheService from './utils/cacheService.js';
+// import { getOrSetCache } from './utils/cacheHelpers.js';
 
 const app = express()
 
@@ -173,7 +174,6 @@ app.use(cors({
             "http://127.0.0.1:3000",
             "http://127.0.0.1:3001",
             "http://127.0.0.1:3002",
-            "https://brandly1.vercel.app",
             process.env.CORS_ORIGIN
         ].filter(Boolean);
 
@@ -215,28 +215,14 @@ app.get("/", (req, res) => {
 });
 
 
-console.log("🚀 Server starting...");
-console.log("📌 Webhook route registered");
-console.log("📌 Base API URL:", process.env.BASE_URL);
+if (process.env.NODE_ENV !== 'production') {
+    console.log("🚀 Server starting...");
+    console.log("📌 Webhook route registered");
+    console.log("📌 Base API URL:", process.env.BASE_URL);
+}
 
 
-app.get("/cache-test", async (req, res) => {
-    await cacheService.set(
-        "test-key",
-        {
-            name: "Brandly",
-            cache: true,
-        },
-        60
-    );
-
-    const data =
-        await cacheService.get(
-            "test-key"
-        );
-
-    return res.json(data);
-});
+// Debug route removed for production
 
 
 // routes declaration

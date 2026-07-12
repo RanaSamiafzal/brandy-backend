@@ -4,15 +4,23 @@ import User from "../modules/user/user.model.js";
 import { socketManager } from "./socketManager.js";
 
 const initializeSocket = (httpServer, app) => {
+    const allowedSocketOrigins = [
+        "http://localhost:5173", 
+        "http://localhost:3000", 
+        "http://127.0.0.1:5173", 
+        "http://127.0.0.1:3000", 
+        process.env.CORS_ORIGIN
+    ].filter(Boolean);
+
     const io = new Server(httpServer, {
         cors: {
-            origin: [
-                "http://localhost:5173", 
-                "http://localhost:3000", 
-                "http://127.0.0.1:5173", 
-                "http://127.0.0.1:3000", 
-                process.env.CORS_ORIGIN
-            ].filter(Boolean),
+            origin: function (origin, callback) {
+                if (!origin || allowedSocketOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+                    callback(null, true);
+                } else {
+                    callback(new Error('Not allowed by CORS'));
+                }
+            },
             credentials: true
         },
         transports: ['websocket', 'polling'],
