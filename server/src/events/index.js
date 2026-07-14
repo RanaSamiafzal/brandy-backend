@@ -36,6 +36,12 @@ export const registerListeners = () => {
             userId: user._id,
             timestamp: new Date()
         });
+
+        // Send login alert email
+        await addJob(QUEUES.EMAILS, 'login_alert', {
+            to: user.email,
+            name: user.fullname
+        });
     });
 
     // 2. Collaboration Events

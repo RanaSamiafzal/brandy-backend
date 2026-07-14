@@ -4,6 +4,7 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
 import { checkAndMarkComplete, getCompletionStatus } from "../../utils/profileCompletion.js";
+import User from "../user/user.model.js";
 
 /**
  * Get influencer dashboard
@@ -163,8 +164,11 @@ const updateInfluencerProfile = AsyncHandler(async (req, res) => {
     await checkAndMarkComplete(req.user._id, "influencer");
     const completion = await getCompletionStatus(req.user._id, "influencer");
 
+    // Return fresh user so frontend gets updated profileComplete flag
+    const freshUser = await User.findById(req.user._id).select("-password -refreshToken").lean();
+
     return res.status(validationStatus.ok).json(
-        new ApiResponse(validationStatus.ok, { influencer, completion, user: req.user }, "Profile updated successfully")
+        new ApiResponse(validationStatus.ok, { influencer, completion, user: freshUser }, "Profile updated successfully")
     );
 });
 

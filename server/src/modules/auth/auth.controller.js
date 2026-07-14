@@ -39,12 +39,24 @@ const register = AsyncHandler(async (req, res) => {
 
     const user = await authService.register(userData);
 
+    // Auto-login the user
+    const { accessToken, refreshToken } = await authService.login(email, password);
+
     // Emit event for background side effects (welcome email, activity log)
     eventBus.emit(EVENTS.USER.REGISTERED, user);
+    eventBus.emit(EVENTS.USER.LOGGED_IN, user);
 
-    return res.status(validationStatus.created).json(
-        new ApiResponse(validationStatus.created, user, "User registered successfully")
-    );
+    return res
+        .status(validationStatus.created)
+        .cookie("accessToken", String(accessToken), cookieOptions)
+        .cookie("refreshToken", String(refreshToken), cookieOptions)
+        .json(
+            new ApiResponse(
+                validationStatus.created,
+                { user, accessToken, refreshToken },
+                "User registered and logged in successfully"
+            )
+        );
 });
 
 /**

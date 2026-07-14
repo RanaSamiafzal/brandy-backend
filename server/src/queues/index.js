@@ -38,6 +38,8 @@ export const startWorkers = async () => {
         let html = '';
         if (job.name === 'welcome_email') {
             html = `<h1>Welcome ${name}!</h1><p>Thanks for joining Brandy.</p>`;
+        } else if (job.name === 'login_alert') {
+            html = `<h1>New Login Alert</h1><p>Hi ${name}, we noticed a new login to your Brandy account. If this wasn't you, please reset your password immediately.</p>`;
         }
 
         await sendEmail({

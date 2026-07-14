@@ -405,11 +405,6 @@ const updateProfile = async (userId, updateData) => {
 
     await influencer.save({ validateBeforeSave: false });
 
-    // Sync user fullname for consistency
-    if (updateData.username) {
-        await User.findByIdAndUpdate(userId, { fullname: updateData.username });
-    }
-
     return await getProfile(userId);
 };
 
