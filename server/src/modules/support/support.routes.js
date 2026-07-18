@@ -5,7 +5,10 @@ import { roleMiddleware } from "../../middleware/roleMiddleware.js";
 
 const router = Router();
 
-// All support routes require authentication
+// Public Routes
+router.post("/contact", supportController.contactUs);
+
+// All support routes below require authentication
 router.use(verifyJwt);
 
 // User Routes

@@ -3,6 +3,7 @@ import { supportRepository } from "./support.repository.js";
 import { AsyncHandler } from "../../utils/Asynchandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
+import { sendEmail } from "../../utils/email.js";
 
 const createTicket = AsyncHandler(async (req, res) => {
     const ticket = await supportService.createTicket(req.user._id, req.body);
@@ -40,9 +41,38 @@ const getAllTickets = AsyncHandler(async (req, res) => {
     );
 });
 
+const contactUs = AsyncHandler(async (req, res) => {
+    const { firstName, lastName, email, subject, message } = req.body;
+    
+    if (!firstName || !lastName || !email || !message) {
+        throw new ApiError(validationStatus.badRequest, "Missing required fields");
+    }
+
+    const html = `
+        <h2>New Contact Form Submission</h2>
+        <p><strong>Name:</strong> ${firstName} ${lastName}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Subject:</strong> ${subject}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message}</p>
+    `;
+
+    // Assuming we send it to an admin email or the support email
+    await sendEmail({
+        to: process.env.EMAIL_USER, // sending to ourselves
+        subject: `Contact Form: ${subject}`,
+        html
+    });
+
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(validationStatus.ok, null, "Message sent successfully")
+    );
+});
+
 export const supportController = {
     createTicket,
     getMyTickets,
     getTicketDetails,
-    getAllTickets
+    getAllTickets,
+    contactUs
 };
