@@ -586,7 +586,11 @@ const searchInfluencers = async ({
                 isVerified: { $first: "$userDetails.isVerified" },
                 verifiedPlatforms: { $first: "$userDetails.verifiedPlatforms" },
                 user: { $first: "$userDetails._id" },
-                isAvailable: { $first: "$isAvailable" }
+                isAvailable: { $first: "$isAvailable" },
+                engagementRate: { $first: "$engagementRate" },
+                tags: { $first: "$tags" },
+                about: { $first: "$about" },
+                followersCount: { $first: "$followersCount" }
             }
         },
         sort === "rating_desc" ? { $sort: { averageRating: -1 } } : { $sort: { createdAt: -1 } },

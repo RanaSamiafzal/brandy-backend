@@ -139,6 +139,18 @@ const InfluencerSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    engagementRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    tags: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -146,6 +158,7 @@ const InfluencerSchema = new mongoose.Schema(
 InfluencerSchema.index({ category: 1 });
 InfluencerSchema.index({ location: 1 });
 InfluencerSchema.index({ averageRating: -1 });
+InfluencerSchema.index({ engagementRate: -1 });
 InfluencerSchema.index({ "platforms.name": 1 });
 
 // Indexes optimized for AI Matching (Layer 1 Filtering)
