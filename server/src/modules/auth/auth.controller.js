@@ -6,6 +6,8 @@ import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { uploadOnCloudinary } from "../../config/cloudinary.js";
 import { eventBus } from "../../events/eventBus.js";
 import { EVENTS } from "../../events/constants.js";
+import passport from "../../config/passport.js";
+import { encodeGoogleState, decodeGoogleState, frontendBaseUrl } from "./auth.googleState.js";
 
 const cookieOptions = {
     httpOnly: true,
@@ -192,6 +194,81 @@ const verifyOTP = AsyncHandler(async (req, res) => {
 });
 
 /**
+ * Whether Google OAuth is configured (used by the login button — hide if false).
+ */
+const googleStatus = (req, res) => {
+    const configured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+    return res.status(validationStatus.ok).json(
+        new ApiResponse(
+            validationStatus.ok,
+            { configured },
+            configured ? "Google login is available" : "Google login is not configured"
+        )
+    );
+};
+
+/**
+ * Start Google sign-in / sign-up (redirects to Google).
+ */
+const googleStart = (req, res, next) => {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        return next(new ApiError(503, "Google login is not configured"));
+    }
+
+    const role = req.query.role === "influencer" ? "influencer" : "brand";
+    const intent = req.query.intent === "signup" ? "signup" : "login";
+    const state = encodeGoogleState({ role, intent });
+
+    return passport.authenticate("google", {
+        scope: ["profile", "email"],
+        session: false,
+        state,
+        prompt: "select_account",
+    })(req, res, next);
+};
+
+/**
+ * Google OAuth callback — set cookies and send the browser back to the client.
+ */
+const googleCallback = (req, res, next) => {
+    const front = frontendBaseUrl();
+    const fail = (msg, path = "/login") =>
+        res.redirect(`${front}${path}?error=google&msg=${encodeURIComponent(msg)}`);
+
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        return fail("Google login is not configured");
+    }
+
+    passport.authenticate("google", { session: false }, async (err, profile) => {
+        try {
+            if (err || !profile) {
+                return fail("Google sign-in was cancelled or failed");
+            }
+
+            const { role, intent } = decodeGoogleState(req.query.state);
+            const { user, accessToken, refreshToken, isNew } = await authService.loginWithGoogle({
+                profile,
+                role,
+                intent,
+            });
+
+            if (isNew) {
+                eventBus.emit(EVENTS.USER.REGISTERED, user);
+            }
+            eventBus.emit(EVENTS.USER.LOGGED_IN, user);
+
+            return res
+                .cookie("accessToken", String(accessToken), cookieOptions)
+                .cookie("refreshToken", String(refreshToken), cookieOptions)
+                .redirect(`${front}/oauth/google/callback`);
+        } catch (error) {
+            const path = error.statusCode === 404 ? "/register" : "/login";
+            return fail(error.message || "Google sign-in failed", path);
+        }
+    })(req, res, next);
+};
+
+/**
  * Initialize Facebook login
  */
 const facebookConnect = AsyncHandler(async (req, res) => {
@@ -234,6 +311,9 @@ export const authController = {
     changePassword,
     sendOTP,
     verifyOTP,
+    googleStatus,
+    googleStart,
+    googleCallback,
     facebookConnect,
     facebookCallback,
 };

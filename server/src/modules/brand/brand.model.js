@@ -32,6 +32,13 @@ const BrandSchema = new mongoose.Schema(
             default: "",
             trim: true,
         },
+        geo: {
+            lat: { type: Number, min: -90, max: 90, default: null },
+            lng: { type: Number, min: -180, max: 180, default: null },
+            city: { type: String, trim: true, default: "" },
+            country: { type: String, trim: true, default: "" },
+            formatted: { type: String, trim: true, default: "" },
+        },
         description: {
             type: String,
             default: "",

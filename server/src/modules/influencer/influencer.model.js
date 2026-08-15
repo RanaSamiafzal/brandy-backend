@@ -135,6 +135,13 @@ const InfluencerSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    geo: {
+      lat: { type: Number, min: -90, max: 90, default: null },
+      lng: { type: Number, min: -180, max: 180, default: null },
+      city: { type: String, trim: true, default: "" },
+      country: { type: String, trim: true, default: "" },
+      formatted: { type: String, trim: true, default: "" },
+    },
     isAvailable: {
       type: Boolean,
       default: true,
@@ -157,6 +164,7 @@ const InfluencerSchema = new mongoose.Schema(
 
 InfluencerSchema.index({ category: 1 });
 InfluencerSchema.index({ location: 1 });
+InfluencerSchema.index({ "geo.lat": 1, "geo.lng": 1 });
 InfluencerSchema.index({ averageRating: -1 });
 InfluencerSchema.index({ engagementRate: -1 });
 InfluencerSchema.index({ "platforms.name": 1 });

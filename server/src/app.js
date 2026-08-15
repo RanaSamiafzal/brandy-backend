@@ -18,6 +18,7 @@ import notificationRouter from './modules/notification/notification.routes.js'
 import adminRouter from './modules/admin/admin.routes.js'
 import supportRouter from './modules/support/support.routes.js'
 import moderationRouter from './modules/moderation/moderation.routes.js'
+import geoRouter from './modules/geo/geo.routes.js'
 import mongoSanitize from 'express-mongo-sanitize';
 import helmet from 'helmet';
 import xss from 'xss-clean';
@@ -25,6 +26,11 @@ import rateLimit from 'express-rate-limit';
 import { stripeController } from './modules/payment/stripe.controller.js'
 import compression from 'compression';
 import { errorMiddleware } from './middleware/errorMiddleware.js';
+import { stripSecretsDeep } from './utils/sanitizeSecrets.js';
+import mongoose from 'mongoose';
+import { QUEUES } from './events/constants.js';
+import { getInitializedQueueNames } from './queues/queueManager.js';
+import { isRedisReady } from './config/redis.js';
 // Cache imports available if needed
 // import cacheService from './utils/cacheService.js';
 // import { getOrSetCache } from './utils/cacheHelpers.js';
@@ -108,12 +114,34 @@ app.use(
 app.use(xss());    // Data sanitization against XSS
 
 // Rate Limiters
+// Auth limits: login 8 failed / 15m, register 5 / 15m, other auth 40 / 15m.
+const isTest = process.env.NODE_ENV === 'test';
+
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100,
-    message: 'Too many requests from this IP, please try again after 15 minutes',
+    windowMs: 15 * 60 * 1000,
+    max: 40,
+    message: { success: false, message: 'Too many auth requests. Try again after 15 minutes.' },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: () => isTest,
+});
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 8,
+    skipSuccessfulRequests: true,
+    message: { success: false, message: 'Too many login attempts. Try again after 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const registerLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: { success: false, message: 'Too many accounts created from this IP. Try again after 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: () => isTest,
 });
 
 const paymentLimiter = rateLimit({
@@ -157,6 +185,8 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Apply rate limiters to specific paths
+app.use('/api/v1/auth/login', loginLimiter);
+app.use('/api/v1/auth/register', registerLimiter);
 app.use('/api/v1/auth', authLimiter);
 app.use('/api/v1/payment', paymentLimiter);
 app.use('/api/v1/aiMatch', aiLimiter);
@@ -207,6 +237,12 @@ app.use(express.static('public', {
 app.use(cookieParser())
 app.use(passport.initialize());
 
+app.use((req, res, next) => {
+    const originalJson = res.json.bind(res);
+    res.json = (body) => originalJson(stripSecretsDeep(body));
+    next();
+});
+
 app.get("/", (req, res) => {
     res.status(200).json({
         success: true,
@@ -242,12 +278,29 @@ app.use('/api/v1/notifications', notificationRouter)
 app.use('/api/v1/admin', adminRouter)
 app.use('/api/v1/support', supportRouter)
 app.use('/api/v1/moderation', moderationRouter)
+app.use('/api/v1/geo', geoRouter)
 
 app.get('/api/v1/ping', (req, res) => res.json({
     status: 'ok',
     server: 'brandy-backend-primary',
     timestamp: new Date().toISOString()
 }))
+
+app.get('/api/v1/health', (req, res) => {
+    const mongoReady = mongoose.connection.readyState === 1;
+    const redisReady = isRedisReady();
+    const expectedQueues = Object.values(QUEUES);
+    const initializedQueues = getInitializedQueueNames();
+    const healthy = mongoReady && expectedQueues.every((name) => initializedQueues.includes(name));
+    res.status(healthy ? 200 : 503).json({
+        status: healthy ? 'ok' : 'degraded',
+        mongo: mongoReady ? 'connected' : 'disconnected',
+        redis: redisReady ? 'ready' : 'not_ready',
+        queues: { expected: expectedQueues, initialized: initializedQueues },
+        webhook: { method: 'POST', path: '/api/v1/payment/webhook' },
+        timestamp: new Date().toISOString()
+    });
+});
 
 // Error handling middleware
 app.use(errorMiddleware);

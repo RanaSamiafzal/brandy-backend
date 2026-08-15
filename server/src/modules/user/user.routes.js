@@ -4,8 +4,12 @@ import { userValidation } from "./user.validation.js";
 import { validate } from "../../middleware/validationMiddleware.js";
 import { verifyJwt } from "../../middleware/authMiddleware.js";
 import { upload } from "../../middleware/multerMiddleware.js";
+import { authController } from "../auth/auth.controller.js";
 
 const router = Router();
+
+// Public: Google Console redirect URI is /api/v1/users/google/callback
+router.get("/google/callback", authController.googleCallback);
 
 router.use(verifyJwt);
 

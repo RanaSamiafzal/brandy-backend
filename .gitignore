@@ -4,3 +4,9 @@ node_modules/
 server/node_modules/
 server/.env
 .vercel
+
+# Local scratch / one-off diagnostic scripts
+scratch/
+server/public/temp/*
+!server/public/temp/.gitkeep
+

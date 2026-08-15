@@ -2,6 +2,7 @@
  * LAYER 3: AI Match Ranking & Formatting Service
  * Pure deterministic formatting and sorting logic. NO DB. NO LLMs.
  */
+import { sanitizeVerifiedPlatforms } from "../../utils/sanitizeSecrets.js";
 
 // Helper to determine Trust Level
 const getTrustLevel = (influencer) => {
@@ -81,7 +82,7 @@ export const formatAndRankInfluencers = (scoredInfluencers) => {
       platforms: inf.platforms || [],
       socialMedia: inf.socialMedia || {},
       isVerified: checkIsVerified(inf),
-      verifiedPlatforms: inf.user?.verifiedPlatforms || inf.verifiedPlatforms || {},
+      verifiedPlatforms: sanitizeVerifiedPlatforms(inf.user?.verifiedPlatforms || inf.verifiedPlatforms || []),
       trustLevel: getTrustLevel(inf),
       averageRating: (inf.reviewsCount || 0) > 0 ? (inf.averageRating || 0) : 0,
       reviewsCount: inf.reviewsCount || 0,

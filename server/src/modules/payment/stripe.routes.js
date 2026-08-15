@@ -2,6 +2,7 @@ import express from 'express';
 import { stripeController } from './stripe.controller.js';
 import { verifyJwt } from '../../middleware/authMiddleware.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
+import { requireProfileComplete } from '../../middleware/profileGate.js';
 import { validate } from '../../middleware/validationMiddleware.js';
 import { stripeValidation } from './stripe.validation.js';
 
@@ -17,7 +18,7 @@ router.use(verifyJwt);
 router.get('/history', stripeController.getPaymentHistory);
 
 // Brand: Fund Escrow & Card Management
-router.post('/escrow/fund', roleMiddleware("brand"), validate(stripeValidation.fundEscrowSchema), stripeController.fundEscrow);
+router.post('/escrow/fund', roleMiddleware("brand"), requireProfileComplete, validate(stripeValidation.fundEscrowSchema), stripeController.fundEscrow);
 router.post('/escrow/sync', roleMiddleware("brand"), validate(stripeValidation.syncEscrowSchema), stripeController.syncEscrowStatus);
 router.get('/methods', roleMiddleware("brand"), stripeController.getPaymentMethods);
 router.post('/methods/setup', roleMiddleware("brand"), stripeController.createSetupIntent);

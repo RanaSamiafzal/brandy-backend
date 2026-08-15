@@ -13,16 +13,20 @@ import { validationStatus } from "../utils/ValidationStatusCode.js";
  * now includes the profileComplete field from the User model.
  */
 export const requireProfileComplete = (req, res, next) => {
-  if (!req.user) {
-    throw new ApiError(validationStatus.unauthorized, "Not authenticated");
-  }
+  try {
+    if (!req.user) {
+      throw new ApiError(validationStatus.unauthorized, "Not authenticated");
+    }
 
-  if (!req.user.profileComplete) {
-    throw new ApiError(
-      validationStatus.forbidden,
-      "Please complete your profile before using this feature. Go to Settings → Profile."
-    );
-  }
+    if (!req.user.profileComplete) {
+      throw new ApiError(
+        validationStatus.forbidden,
+        "Please complete your profile before using this feature. Go to Settings → Profile."
+      );
+    }
 
-  next();
+    next();
+  } catch (err) {
+    next(err);
+  }
 };

@@ -9,6 +9,16 @@ const updateProfileSchema = Joi.object({
     }),
     website: Joi.string().uri().allow(''),
     address: Joi.string().trim().allow(''),
+    geo: Joi.alternatives().try(
+        Joi.string().allow(''),
+        Joi.object({
+            lat: Joi.number().min(-90).max(90),
+            lng: Joi.number().min(-180).max(180),
+            city: Joi.string().allow(''),
+            country: Joi.string().allow(''),
+            formatted: Joi.string().allow(''),
+        })
+    ),
     description: Joi.string().trim().max(1000).allow(''),
     lookingFor: Joi.any(),
     lookingForClear: Joi.any(),

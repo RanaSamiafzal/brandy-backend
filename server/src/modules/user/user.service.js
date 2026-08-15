@@ -4,12 +4,13 @@ import Influencer from "../influencer/influencer.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { emitActivity } from "../../utils/activityUtils.js";
+import { USER_SAFE_SELECT } from "../../utils/sanitizeSecrets.js";
 
 /**
  * Get user by ID
  */
 const getUserById = async (userId) => {
-    const user = await User.findById(userId).select("-password -refreshToken");
+    const user = await User.findById(userId).select(USER_SAFE_SELECT);
     if (!user) {
         throw new ApiError(validationStatus.notFound, "User not found");
     }
@@ -24,7 +25,7 @@ const updateUserProfile = async (userId, updateData) => {
         userId,
         { $set: updateData },
         { new: true }
-    ).select("-password -refreshToken");
+    ).select(USER_SAFE_SELECT);
 
     if (!user) {
         throw new ApiError(validationStatus.notFound, "User not found");

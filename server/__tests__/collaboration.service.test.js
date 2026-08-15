@@ -305,6 +305,7 @@ describe('collaboration.service.js', () => {
       // Find by ID with session
       Collaboration.findById = jest.fn().mockReturnValue({ session: jest.fn().mockResolvedValue(req) });
       Campaign.findById = jest.fn().mockReturnValue({ session: jest.fn().mockResolvedValue(campaign) });
+      Collaboration.findOne = jest.fn().mockReturnValue({ session: jest.fn().mockResolvedValue(null) });
 
       const otherReq = makeRequest({ _id: OTHER_ID, sender: OTHER_ID });
       const otherReqs = [otherReq];

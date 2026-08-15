@@ -101,8 +101,8 @@ const escrowSchema = new Schema({
         closedAt: Date,
         reason: String,
         resolution: String
-    }],
-    
+    }]
+}, {
     timestamps: true
 });
 
@@ -110,3 +110,5 @@ escrowSchema.index({ campaign: 1 });
 escrowSchema.index({ brand: 1, status: 1 });
 
 const Escrow = mongoose.model('Escrow', escrowSchema);
+
+export default Escrow;

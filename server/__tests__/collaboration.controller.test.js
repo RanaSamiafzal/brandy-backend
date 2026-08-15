@@ -7,7 +7,8 @@ const mockVerifyJwt = jest.fn((req, res, next) => {
     _id: '507f1f77bcf86cd799439011',
     role: 'brand',
     email: 'brand@test.com',
-    fullname: 'Test Brand'
+    fullname: 'Test Brand',
+    profileComplete: true,
   };
   next();
 });
@@ -108,7 +109,7 @@ describe('collaboration.controller.js (Integration)', () => {
     jest.clearAllMocks();
     currentValidator = (req, res, next) => next();
     mockVerifyJwt.mockImplementation((req, res, next) => {
-      req.user = { _id: BRAND_ID, role: 'brand', email: 'brand@test.com', fullname: 'Test Brand' };
+      req.user = { _id: BRAND_ID, role: 'brand', email: 'brand@test.com', fullname: 'Test Brand', profileComplete: true };
       next();
     });
   });
@@ -149,6 +150,20 @@ describe('collaboration.controller.js (Integration)', () => {
         proposedBudget: 1000,
         initiatedBy: 'brand'
       });
+    });
+
+    it('should return 403 when profile is incomplete', async () => {
+      mockVerifyJwt.mockImplementation((req, res, next) => {
+        req.user = { _id: BRAND_ID, role: 'brand', profileComplete: false };
+        next();
+      });
+
+      const res = await request(buildApp())
+        .post('/api/v1/collaborations/request')
+        .send({ receiverId: INF_ID, campaignId: CAMP_ID, proposedBudget: 1000 });
+
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/complete your profile/i);
     });
 
     it('should return 400 when validation fails', async () => {

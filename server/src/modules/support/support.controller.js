@@ -1,6 +1,7 @@
 import { supportService } from "./support.service.js";
 import { supportRepository } from "./support.repository.js";
 import { AsyncHandler } from "../../utils/Asynchandler.js";
+import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
 import { sendEmail } from "../../utils/email.js";

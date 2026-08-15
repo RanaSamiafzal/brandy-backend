@@ -80,7 +80,7 @@ const getAllUsers = AsyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
   const [users, total] = await Promise.all([
     User.find(query)
-      .select('-password -refreshToken -passwordResetOTP -emailVerificationOTP')
+      .select('-password -refreshTokens -passwordResetOTP -emailVerificationOTP')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit))

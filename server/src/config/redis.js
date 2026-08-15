@@ -101,7 +101,7 @@ export const closeRedis = async () => {
 
 
 export const isRedisReady = () => {
-    return redisConnection?.status === "ready";
+    return redisConnection?.status === "ready" || sharedConnection?.status === "ready";
 };
 
 

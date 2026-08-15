@@ -4,7 +4,6 @@ import { authValidation } from "./auth.validation.js";
 import { validate } from "../../middleware/validationMiddleware.js";
 import { verifyJwt } from "../../middleware/authMiddleware.js";
 import { upload } from "../../middleware/multerMiddleware.js";
-import passport from "../../config/passport.js";
 import { oauthController } from "../oauth/oauth.controller.js";
 
 const router = Router();
@@ -34,6 +33,10 @@ router.post("/reset-password", validate(authValidation.resetPasswordSchema), aut
 router.post("/change-password", verifyJwt, validate(authValidation.changePasswordSchema), authController.changePassword);
 router.post("/send-otp", verifyJwt, authController.sendOTP);
 router.post("/verify-otp", verifyJwt, authController.verifyOTP);
+
+router.get("/google/status", authController.googleStatus);
+router.get("/google", authController.googleStart);
+router.get("/google/callback", authController.googleCallback);
 
 /**
  * YouTube callback path registered in Google Console.

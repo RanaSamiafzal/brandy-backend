@@ -9,7 +9,7 @@ import { checkAndMarkComplete, getCompletionStatus } from "../../utils/profileCo
  * Get brand dashboard
  */
 const getBrandDashboard = AsyncHandler(async (req, res) => {
-    const stats = await brandService.getDashboardStats(req.user._id);
+    const stats = await brandService.getDashboardStats(req.user._id, req.query);
     return res.status(validationStatus.ok).json(
         new ApiResponse(validationStatus.ok, stats, "Brand dashboard fetched successfully")
     );

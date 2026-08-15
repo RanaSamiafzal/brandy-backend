@@ -56,6 +56,8 @@ export const initQueues = () => {
     Object.values(QUEUES).forEach(q => getQueue(q));
 };
 
+export const getInitializedQueueNames = () => Object.keys(queues);
+
 export const closeQueues = async () => {
     logger.info('Closing all queues...');
     await Promise.all(Object.values(queues).map(q => q.close()));

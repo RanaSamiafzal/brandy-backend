@@ -10,23 +10,416 @@ import mongoose from "mongoose";
 import { influencerService } from "../influencer/influencer.service.js";
 import { activityService } from "../activity/activity.service.js";
 import Review from "../collaboration/review.model.js";
+import Influencer from "../influencer/influencer.model.js";
+import { parseGeoPayload } from "../../utils/geoPayload.js";
+
+const padMonth = (m) => String(m).padStart(2, "0");
+const monthKey = (year, month) => `${year}-${padMonth(month)}`;
+
+const buildMonthAxis = (count = 12, offsetMonths = 0) => {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offsetMonths - (count - 1), 1));
+    const keys = [];
+    const labels = [];
+    for (let i = 0; i < count; i++) {
+        const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1));
+        keys.push(monthKey(d.getUTCFullYear(), d.getUTCMonth() + 1));
+        labels.push(d.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }));
+    }
+    return { start, keys, labels };
+};
+
+const startOfDay = (value) => {
+    const d = new Date(value);
+    d.setHours(0, 0, 0, 0);
+    return d;
+};
+
+const endOfDay = (value) => {
+    const d = new Date(value);
+    d.setHours(23, 59, 59, 999);
+    return d;
+};
+
+const parseDashboardRange = (from, to) => {
+    if (!from && !to) return null;
+    const end = to ? endOfDay(to) : endOfDay(new Date());
+    const start = from ? startOfDay(from) : startOfDay(new Date(end.getTime() - 29 * 24 * 60 * 60 * 1000));
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return null;
+    return { start, end };
+};
+
+const buildMonthAxisFromRange = (startDate, endDate) => {
+    const start = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
+    const last = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), 1));
+    const keys = [];
+    const labels = [];
+    const cursor = new Date(start);
+    while (cursor <= last && keys.length < 24) {
+        keys.push(monthKey(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1));
+        labels.push(cursor.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }));
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+    return { start, keys, labels };
+};
+
+const alignSeries = (values, length) => {
+    const next = [...(values || [])];
+    while (next.length < length) next.unshift(0);
+    return next.slice(-length);
+};
+
+const dateMatch = (range) => (range ? { createdAt: { $gte: range.start, $lte: range.end } } : {});
+
+const fillMonthCounts = (rows, keys) => {
+    const map = Object.fromEntries(keys.map((k) => [k, 0]));
+    for (const row of rows) {
+        const key = monthKey(row._id.y, row._id.m);
+        if (key in map) map[key] = row.count;
+    }
+    return keys.map((k) => map[k]);
+};
+
+const roundMoney = (n) => Math.round(Number(n || 0) * 100) / 100;
+
+const fillMonthSums = (rows, keys) => {
+    const map = Object.fromEntries(keys.map((k) => [k, 0]));
+    for (const row of rows) {
+        const key = monthKey(row._id.y, row._id.m);
+        if (key in map) map[key] = roundMoney((map[key] || 0) + (row.total || 0));
+    }
+    return keys.map((k) => map[k]);
+};
+
+const addSeries = (a = [], b = []) => a.map((v, i) => roundMoney((v || 0) + (b[i] || 0)));
+
+const groupByMonth = async (Model, match, dateExpr) => Model.aggregate([
+    { $match: match },
+    { $group: { _id: { y: { $year: dateExpr }, m: { $month: dateExpr } }, count: { $sum: 1 } } },
+]);
+
+const getInfluencerMapData = async () => {
+    const located = await Influencer.aggregate([
+        {
+            $match: {
+                "geo.lat": { $ne: null, $type: "number" },
+                "geo.lng": { $ne: null, $type: "number" },
+            },
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "user",
+                foreignField: "_id",
+                as: "userDoc",
+            },
+        },
+        { $unwind: "$userDoc" },
+        {
+            $match: {
+                "userDoc.isBlocked": { $ne: true },
+                "userDoc.isDeactivated": { $ne: true },
+            },
+        },
+        {
+            $group: {
+                _id: {
+                    lat: { $round: ["$geo.lat", 2] },
+                    lng: { $round: ["$geo.lng", 2] },
+                    city: { $toLower: { $ifNull: ["$geo.city", ""] } },
+                    country: { $toLower: { $ifNull: ["$geo.country", ""] } },
+                },
+                count: { $sum: 1 },
+                avgRating: { $avg: { $ifNull: ["$averageRating", 0] } },
+                categories: { $push: { $ifNull: ["$category", "Other"] } },
+                lat: { $avg: "$geo.lat" },
+                lng: { $avg: "$geo.lng" },
+                city: { $first: "$geo.city" },
+                country: { $first: "$geo.country" },
+                formatted: { $first: "$geo.formatted" },
+            },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 80 },
+    ]);
+
+    const markers = located.map((row) => {
+        const tally = {};
+        (row.categories || []).forEach((c) => {
+            const key = (c && String(c).trim()) || "Other";
+            tally[key] = (tally[key] || 0) + 1;
+        });
+        const topCategory = Object.entries(tally).sort((a, b) => b[1] - a[1])[0]?.[0] || "Other";
+        const name = row.city || row.formatted?.split(",")[0] || row.country || "Unknown";
+        return {
+            name,
+            city: row.city || "",
+            country: row.country || "",
+            coordinates: [Number(row.lng), Number(row.lat)],
+            count: row.count,
+            avgRating: Number((row.avgRating || 0).toFixed(1)),
+            topCategory,
+        };
+    });
+
+    const categoryRows = await Influencer.aggregate([
+        {
+            $lookup: {
+                from: "users",
+                localField: "user",
+                foreignField: "_id",
+                as: "userDoc",
+            },
+        },
+        { $unwind: "$userDoc" },
+        {
+            $match: {
+                "userDoc.isBlocked": { $ne: true },
+                "userDoc.isDeactivated": { $ne: true },
+            },
+        },
+        {
+            $group: {
+                _id: {
+                    $cond: [
+                        { $gt: [{ $strLenCP: { $ifNull: ["$category", ""] } }, 0] },
+                        "$category",
+                        "Other",
+                    ],
+                },
+                count: { $sum: 1 },
+            },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 12 },
+    ]);
+
+    const categories = categoryRows.map((row) => ({
+        label: row._id || "Other",
+        count: row.count,
+    }));
+
+    return {
+        markers,
+        categories,
+        locatedCount: markers.reduce((s, m) => s + m.count, 0),
+        totalInfluencers: categories.reduce((s, c) => s + c.count, 0),
+    };
+};
+
+const getCampaignsFlow = async (userId, range = null) => {
+    const brandId = new mongoose.Types.ObjectId(userId);
+    const current = range ? buildMonthAxisFromRange(range.start, range.end) : buildMonthAxis(12, 0);
+    const previous = range
+        ? buildMonthAxisFromRange(
+            new Date(range.start.getTime() - (range.end - range.start)),
+            new Date(range.start.getTime() - 1)
+        )
+        : buildMonthAxis(12, 12);
+    const currentStart = range ? range.start : current.start;
+    const currentEnd = range ? range.end : null;
+    const previousStart = range ? new Date(range.start.getTime() - (range.end - range.start)) : previous.start;
+    const previousEnd = range ? range.start : current.start;
+
+    const currentCreated = currentEnd
+        ? { $gte: currentStart, $lte: currentEnd }
+        : { $gte: currentStart };
+    const previousCreated = { $gte: previousStart, $lt: previousEnd };
+
+    const [campaignRows, lastYearCampaignRows, requestRows, completedRows] = await Promise.all([
+        groupByMonth(
+            Campaign,
+            { brand: brandId, isDeleted: false, createdAt: currentCreated },
+            "$createdAt"
+        ),
+        groupByMonth(
+            Campaign,
+            { brand: brandId, isDeleted: false, createdAt: previousCreated },
+            "$createdAt"
+        ),
+        groupByMonth(
+            Collaboration,
+            { brand: brandId, isDeleted: { $ne: true }, createdAt: currentCreated },
+            "$createdAt"
+        ),
+        Collaboration.aggregate([
+            {
+                $match: {
+                    brand: brandId,
+                    isDeleted: { $ne: true },
+                    status: "completed",
+                    $or: [
+                        { completedAt: currentCreated },
+                        { completedAt: null, updatedAt: currentCreated },
+                    ],
+                },
+            },
+            { $addFields: { bucketDate: { $ifNull: ["$completedAt", "$updatedAt"] } } },
+            { $match: { bucketDate: currentCreated } },
+            {
+                $group: {
+                    _id: { y: { $year: "$bucketDate" }, m: { $month: "$bucketDate" } },
+                    count: { $sum: 1 },
+                },
+            },
+        ]),
+    ]);
+
+    return {
+        labels: current.labels,
+        campaigns: fillMonthCounts(campaignRows, current.keys),
+        requests: fillMonthCounts(requestRows, current.keys),
+        completed: fillMonthCounts(completedRows, current.keys),
+        lastYearCampaigns: alignSeries(fillMonthCounts(lastYearCampaignRows, previous.keys), current.keys.length),
+    };
+};
+
+const sumFundingByMonth = async (brandId, start, end) => {
+    const historyDate = end ? { $gte: start, $lt: end } : { $gte: start };
+    const leftoverDate = end ? { $gte: start, $lt: end } : { $gte: start };
+
+    const [historyRows, leftoverRows] = await Promise.all([
+        Collaboration.aggregate([
+            { $match: { brand: brandId, isDeleted: { $ne: true }, fundingHistory: { $exists: true, $ne: [] } } },
+            { $unwind: "$fundingHistory" },
+            { $match: { "fundingHistory.fundedAt": historyDate } },
+            {
+                $group: {
+                    _id: { y: { $year: "$fundingHistory.fundedAt" }, m: { $month: "$fundingHistory.fundedAt" } },
+                    total: { $sum: { $ifNull: ["$fundingHistory.amount", 0] } },
+                },
+            },
+        ]),
+        Collaboration.aggregate([
+            {
+                $match: {
+                    brand: brandId,
+                    isDeleted: { $ne: true },
+                    escrowFunded: true,
+                    totalFundedAmount: { $gt: 0 },
+                    updatedAt: leftoverDate,
+                    $or: [{ fundingHistory: { $exists: false } }, { fundingHistory: { $eq: [] } }],
+                },
+            },
+            {
+                $group: {
+                    _id: { y: { $year: "$updatedAt" }, m: { $month: "$updatedAt" } },
+                    total: { $sum: { $ifNull: ["$totalFundedAmount", "$agreedBudget"] } },
+                },
+            },
+        ]),
+    ]);
+
+    return { historyRows, leftoverRows };
+};
+
+const sumPaymentsByMonth = (brandId, start, end, status) => {
+    const range = end ? { $gte: start, $lt: end } : { $gte: start };
+    return Payment.aggregate([
+        { $match: { brand: brandId, status } },
+        { $addFields: { bucketDate: { $ifNull: ["$completion.completedAt", "$createdAt"] } } },
+        { $match: { bucketDate: range } },
+        {
+            $group: {
+                _id: { y: { $year: "$bucketDate" }, m: { $month: "$bucketDate" } },
+                total: { $sum: { $ifNull: ["$amount", 0] } },
+            },
+        },
+    ]);
+};
+
+const getBrandSpending = async (userId, range = null) => {
+    const brandId = new mongoose.Types.ObjectId(userId);
+    const current = range ? buildMonthAxisFromRange(range.start, range.end) : buildMonthAxis(12, 0);
+    const previous = range
+        ? buildMonthAxisFromRange(
+            new Date(range.start.getTime() - (range.end - range.start)),
+            new Date(range.start.getTime() - 1)
+        )
+        : buildMonthAxis(12, 12);
+    const currentStart = range ? range.start : current.start;
+    const currentEnd = range ? range.end : null;
+    const previousStart = range ? new Date(range.start.getTime() - (range.end - range.start)) : previous.start;
+    const previousEnd = range ? range.start : current.start;
+
+    const [currentFunded, lastFunded, releasedRows, lastYearReleasedRows, snapshot] = await Promise.all([
+        sumFundingByMonth(brandId, currentStart, currentEnd),
+        sumFundingByMonth(brandId, previousStart, previousEnd),
+        sumPaymentsByMonth(brandId, currentStart, currentEnd, "completed"),
+        sumPaymentsByMonth(brandId, previousStart, previousEnd, "completed"),
+        Collaboration.aggregate([
+            { $match: { brand: brandId, isDeleted: { $ne: true }, escrowFunded: true } },
+            {
+                $group: {
+                    _id: null,
+                    funded: { $sum: { $ifNull: ["$totalFundedAmount", 0] } },
+                    paid: { $sum: { $ifNull: ["$totalPaidAmount", 0] } },
+                },
+            },
+        ]),
+    ]);
+
+    const funded = addSeries(
+        fillMonthSums(currentFunded.historyRows, current.keys),
+        fillMonthSums(currentFunded.leftoverRows, current.keys)
+    );
+    const released = fillMonthSums(releasedRows, current.keys);
+    const lastYearFunded = alignSeries(
+        addSeries(
+            fillMonthSums(lastFunded.historyRows, previous.keys),
+            fillMonthSums(lastFunded.leftoverRows, previous.keys)
+        ),
+        current.keys.length
+    );
+    const lastYearReleased = alignSeries(fillMonthSums(lastYearReleasedRows, previous.keys), current.keys.length);
+
+    let runFunded = 0;
+    let runReleased = 0;
+    const payoutRate = funded.map((monthFunded, i) => {
+        runFunded += monthFunded;
+        runReleased += released[i] || 0;
+        if (runFunded <= 0) return 0;
+        return Math.round((runReleased / runFunded) * 1000) / 10;
+    });
+
+    const totals = snapshot[0] || { funded: 0, paid: 0 };
+    const totalFunded = roundMoney(funded.reduce((s, n) => s + n, 0));
+    const totalReleased = roundMoney(released.reduce((s, n) => s + n, 0));
+
+    return {
+        labels: current.labels,
+        funded,
+        released,
+        lastYearFunded,
+        lastYearReleased,
+        payoutRate,
+        totalFunded,
+        totalReleased,
+        allTimeFunded: roundMoney(totals.funded),
+        allTimeReleased: roundMoney(totals.paid),
+        heldInEscrow: roundMoney(Math.max(0, (totals.funded || 0) - (totals.paid || 0))),
+    };
+};
 
 /**
  * Get brand dashboard statistics
  */
-const getDashboardStats = async (userId) => {
+const getDashboardStats = async (userId, query = {}) => {
     const brand = await Brand.findOne({ user: userId }).select("_id").lean();
     if (!brand) {
         throw new ApiError(validationStatus.notFound, "Brand profile not found");
     }
 
+    const range = parseDashboardRange(query.from, query.to);
     const now = new Date();
+    const brandObjectId = new mongoose.Types.ObjectId(userId);
 
     const campaignStats = await Campaign.aggregate([
         {
             $match: {
-                brand: new mongoose.Types.ObjectId(userId),
-                isDeleted: false
+                brand: brandObjectId,
+                isDeleted: false,
+                ...dateMatch(range),
             }
         },
         {
@@ -60,25 +453,35 @@ const getDashboardStats = async (userId) => {
                 activeCampaigns: { $sum: { $cond: [{ $eq: ["$dynamicStatus", "active"] }, 1, 0] } },
                 completedCampaigns: { $sum: { $cond: [{ $eq: ["$dynamicStatus", "completed"] }, 1, 0] } },
                 pendingCampaigns: { $sum: { $cond: [{ $eq: ["$dynamicStatus", "pending"] }, 1, 0] } },
+                draftCampaigns: { $sum: { $cond: [{ $eq: ["$dynamicStatus", "draft"] }, 1, 0] } },
             },
         },
     ]);
 
+    const acceptedStatuses = [
+        "awaiting_onboarding",
+        "awaiting_funds",
+        "active",
+        "in_progress",
+        "review",
+        "completed",
+    ];
+
     const collaborationStats = await Collaboration.aggregate([
         {
             $match: {
-                $or: [{ influencer: new mongoose.Types.ObjectId(userId) }, { brand: new mongoose.Types.ObjectId(userId) }],
-                status: "requested"
+                brand: brandObjectId,
+                isDeleted: { $ne: true },
+                ...dateMatch(range),
             }
         },
         {
             $group: {
                 _id: null,
                 totalRequests: { $sum: 1 },
-                acceptedRequests: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
+                acceptedRequests: { $sum: { $cond: [{ $in: ["$status", acceptedStatuses] }, 1, 0] } },
                 pendingRequests: { $sum: { $cond: [{ $eq: ["$status", "requested"] }, 1, 0] } },
                 influencers: { $addToSet: "$influencer" },
-                brands: { $addToSet: "$brand" },
             },
         },
         {
@@ -86,37 +489,86 @@ const getDashboardStats = async (userId) => {
                 totalRequests: 1,
                 acceptedRequests: 1,
                 pendingRequests: 1,
-                totalInfluencersContacted: {
-                    $size: {
-                        $setDifference: [
-                            { $setUnion: ["$influencers", "$brands"] },
-                            [new mongoose.Types.ObjectId(userId)]
-                        ]
-                    }
-                }
+                totalInfluencersContacted: { $size: "$influencers" },
             },
         },
     ]);
 
-    const recentCampaigns = await Campaign.find({ brand: userId, isDeleted: false })
+    const recentCampaigns = await Campaign.find({ brand: userId, isDeleted: false, ...dateMatch(range) })
         .sort({ createdAt: -1 })
         .limit(5)
-        .select("name status createdAt")
+        .select("name status createdAt campaignTimeline")
         .lean();
 
-    const campaignData = campaignStats[0] || { totalCampaigns: 0, activeCampaigns: 0, completedCampaigns: 0, pendingCampaigns: 0 };
-    const collaborationData = collaborationStats[0] || { totalRequests: 0, acceptedRequests: 0, pendingRequests: 0, totalInfluencersContacted: 0 };
+    const campaignData = campaignStats[0] || {
+        totalCampaigns: 0,
+        activeCampaigns: 0,
+        completedCampaigns: 0,
+        pendingCampaigns: 0,
+        draftCampaigns: 0,
+    };
+    const collaborationData = collaborationStats[0] || {
+        totalRequests: 0,
+        acceptedRequests: 0,
+        pendingRequests: 0,
+        totalInfluencersContacted: 0,
+    };
+
+    const collabStatusRows = await Collaboration.aggregate([
+        {
+            $match: {
+                brand: brandObjectId,
+                isDeleted: { $ne: true },
+                ...dateMatch(range),
+            },
+        },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]);
+    const statusCounts = Object.fromEntries(collabStatusRows.map((row) => [row._id, row.count]));
+    const sumStatuses = (names) => names.reduce((s, name) => s + (statusCounts[name] || 0), 0);
+    const collabCompleted = sumStatuses(["completed"]);
+    const collabActive = sumStatuses(["active"]);
+    const collabInProgress = sumStatuses(["in_progress", "review"]);
+    const collabPending = sumStatuses(["requested", "awaiting_onboarding", "awaiting_funds"]);
+    const collabClosed = sumStatuses(["rejected", "cancelled", "suspended"]);
+    const collabStats = {
+        completed: collabCompleted,
+        active: collabActive,
+        inProgress: collabInProgress,
+        pending: collabPending,
+        closed: collabClosed,
+        total: collabCompleted + collabActive + collabInProgress + collabPending + collabClosed,
+        donut: {
+            labels: ["Completed", "Active", "In Progress"],
+            data: [collabCompleted, collabActive, collabInProgress],
+        },
+        radar: {
+            labels: ["Completed", "Active", "In Progress", "Pending", "Closed"],
+            data: [collabCompleted, collabActive, collabInProgress, collabPending, collabClosed],
+        },
+    };
+
+    const [campaignsFlow, influencerMap, brandSpending] = await Promise.all([
+        getCampaignsFlow(userId, range),
+        getInfluencerMapData(),
+        getBrandSpending(userId, range),
+    ]);
 
     return {
         totalCampaigns: campaignData.totalCampaigns,
         activeCampaigns: campaignData.activeCampaigns,
         completedCampaigns: campaignData.completedCampaigns,
         pendingCampaigns: campaignData.pendingCampaigns,
+        draftCampaigns: campaignData.draftCampaigns || 0,
         totalRequests: collaborationData.totalRequests,
         acceptedRequests: collaborationData.acceptedRequests,
         pendingRequests: collaborationData.pendingRequests,
         totalInfluencersContacted: collaborationData.totalInfluencersContacted,
         recentCampaigns,
+        campaignsFlow,
+        influencerMap,
+        brandSpending,
+        collabStats,
     };
 };
 
@@ -451,6 +903,18 @@ const updateProfile = async (userId, updateData) => {
             console.log(`[BrandService] Brand profile not found during socialMedia sync.`);
         }
         delete updateData.socialMedia;
+    }
+
+    if (updateData.geo !== undefined) {
+        const parsedGeo = parseGeoPayload(updateData.geo);
+        if (parsedGeo) {
+            updateData.geo = parsedGeo;
+            if (!updateData.address) {
+                updateData.address = parsedGeo.formatted || `${parsedGeo.city}, ${parsedGeo.country}`.replace(/^,\s*/, "");
+            }
+        } else {
+            updateData.geo = { lat: null, lng: null, city: "", country: "", formatted: "" };
+        }
     }
 
     // Sync profilePic/logo to User model

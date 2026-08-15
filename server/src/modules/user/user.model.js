@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
+import { applyUserSecretTransform } from "../../utils/sanitizeSecrets.js"
 
 const UserSchema = new mongoose.Schema(
     {
@@ -33,6 +34,11 @@ const UserSchema = new mongoose.Schema(
         isBlocked: {
             type: Boolean,
             default: false,
+        },
+        blockReason: {
+            type: String,
+            default: null,
+            trim: true,
         },
         refreshTokens: [{
             type: String,
@@ -148,8 +154,8 @@ const UserSchema = new mongoose.Schema(
     },
     {
         timestamps: true,
-        toJSON: { virtuals: true },
-        toObject: { virtuals: true },
+        toJSON: { virtuals: true, transform: applyUserSecretTransform },
+        toObject: { virtuals: true, transform: applyUserSecretTransform },
     }
 )
 
@@ -166,16 +172,16 @@ UserSchema.virtual('isProfileVerified').get(function () {
 // This prevents a MongoDB error when old documents have platforms stored as []
 // and Mongoose tries to write platforms.youtube into it during save().
 UserSchema.pre("save", function (next) {
+    // In-memory cast can hide a stored array; still replace the whole field.
     if (Array.isArray(this.platforms)) {
-        this.platforms = {};
-        this.markModified('platforms');
+        this.set("platforms", {});
     }
-    
+
     // Clean up invalid verifiedPlatforms to avoid validation errors
     if (this.verifiedPlatforms && this.verifiedPlatforms.length > 0) {
         this.verifiedPlatforms = this.verifiedPlatforms.filter(vp => vp && vp.platform);
     }
-    
+
     next();
 });
 

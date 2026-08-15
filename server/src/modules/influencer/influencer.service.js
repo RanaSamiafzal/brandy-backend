@@ -7,6 +7,7 @@ import Payment from "../payment/payment.model.js";
 import Activity from "../activity/activity.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
+import { parseGeoPayload } from "../../utils/geoPayload.js";
 
 import mongoose from "mongoose";
 
@@ -385,6 +386,19 @@ const updateProfile = async (userId, updateData) => {
         delete updateData.portfolio;
     }
 
+    if (updateData.geo !== undefined) {
+        const parsedGeo = parseGeoPayload(updateData.geo);
+        if (parsedGeo) {
+            influencer.geo = parsedGeo;
+            if (!updateData.location) {
+                updateData.location = parsedGeo.formatted || `${parsedGeo.city}, ${parsedGeo.country}`.replace(/^,\s*/, "");
+            }
+        } else {
+            influencer.geo = { lat: null, lng: null, city: "", country: "", formatted: "" };
+        }
+        delete updateData.geo;
+    }
+
     // Sync images to User model
     if (updateData.profilePicture || updateData.coverImage) {
         const userUpdates = {};
@@ -579,6 +593,7 @@ const searchInfluencers = async ({
                   } 
                 },
                 location: { $first: "$location" },
+                geo: { $first: "$geo" },
                 platforms: { $push: "$platforms" },
                 minPrice: { $min: "$platforms.services.price" },
                 createdAt: { $first: "$createdAt" },
@@ -664,8 +679,12 @@ const getInfluencerById = async (influencerId) => {
         {
             $project: {
                 "user.password": 0,
+                "user.refreshTokens": 0,
                 "user.refreshToken": 0,
                 "user.passwordResetOTP": 0,
+                "user.passwordResetExpires": 0,
+                "user.emailVerificationOTP": 0,
+                "user.verifiedPlatforms.refreshToken": 0,
             },
         },
     ]);

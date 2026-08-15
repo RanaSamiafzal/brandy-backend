@@ -21,6 +21,35 @@ describe('Phase 1: Infrastructure & Environment Audit', () => {
         });
     });
 
+    describe('GET /api/v1/health', () => {
+        it('should report webhook path and expected queues', async () => {
+            const response = await request(app).get('/api/v1/health');
+            expect([200, 503]).toContain(response.status);
+            expect(response.body.webhook).toEqual({
+                method: 'POST',
+                path: '/api/v1/payment/webhook',
+            });
+            expect(response.body.queues.expected).toEqual(
+                expect.arrayContaining([
+                    'notification_queue',
+                    'moderation_queue',
+                    'analytics_queue',
+                    'email_queue',
+                ])
+            );
+        });
+    });
+
+    describe('POST /api/v1/payment/webhook', () => {
+        it('should reject unsigned webhook payloads with 400', async () => {
+            const response = await request(app)
+                .post('/api/v1/payment/webhook')
+                .set('Content-Type', 'application/json')
+                .send({ type: 'payment_intent.succeeded' });
+            expect(response.status).toBe(400);
+        });
+    });
+
     describe('Environment Variables', () => {
         it('should have basic environment variables loaded', () => {
             expect(process.env).toBeDefined();
@@ -74,9 +103,9 @@ describe('Phase 1: Infrastructure & Environment Audit', () => {
     });
 
     describe('Rate Limiting', () => {
-        it('should limit auth routes after many requests', async () => {
+        it('should limit login after 8 failed attempts in 15 minutes', async () => {
             const promises = [];
-            for (let i = 0; i < 110; i++) {
+            for (let i = 0; i < 20; i++) {
                 promises.push(
                     request(app)
                         .post('/api/v1/auth/login')
@@ -89,17 +118,16 @@ describe('Phase 1: Infrastructure & Environment Audit', () => {
             expect(tooMany.length).toBeGreaterThan(0);
         }, 30000);
 
-        it('should include rate-limit headers on limited response', async () => {
-            // First make one auth request to warm up the rate limiter
-            await request(app).post('/api/v1/auth/login').send({ email: 't@t.com', password: 'p' });
-            // Make enough to get limited
+        it('should include rate-limit headers and JSON body on 429', async () => {
             const results = [];
-            for (let i = 0; i < 120; i++) {
+            for (let i = 0; i < 15; i++) {
                 results.push(await request(app).post('/api/v1/auth/login').send({ email: 't@t.com', password: 'p' }));
             }
             const limited = results.find(r => r.status === 429);
             expect(limited).toBeDefined();
             expect(limited.headers['retry-after']).toBeDefined();
+            expect(limited.body.success).toBe(false);
+            expect(limited.body.message).toMatch(/login attempts/i);
         }, 30000);
     });
 
@@ -124,6 +152,12 @@ describe('Phase 1: Infrastructure & Environment Audit', () => {
             const res = await request(app).get('/api/v1/nonexistent');
             expect(res.status).toBe(404);
             expect(res.body).toBeDefined();
+        });
+
+        it('should not expose the removed brands debug-in leak', async () => {
+            const res = await request(app).get('/api/v1/brands/debug-in');
+            expect(res.status).not.toBe(200);
+            expect(JSON.stringify(res.body)).not.toMatch(/Influencers fetched successfully/);
         });
     });
 

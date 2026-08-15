@@ -43,7 +43,8 @@ function defaultBrandUser(req, res, next) {
     _id: '507f1f77bcf86cd799439011',
     role: 'brand',
     email: 'brand@test.com',
-    fullname: 'Test Brand'
+    fullname: 'Test Brand',
+    profileComplete: true,
   };
   next();
 }
@@ -284,7 +285,7 @@ describe('campaign.controller.js', () => {
     beforeEach(() => {
       mockVerifyJwt.mockReset();
       mockVerifyJwt.mockImplementation((req, res, next) => {
-        req.user = { _id: 'inf_id', role: 'influencer' };
+        req.user = { _id: 'inf_id', role: 'influencer', profileComplete: true };
         next();
       });
     });
@@ -298,6 +299,17 @@ describe('campaign.controller.js', () => {
       const res = await request(app).post(`/api/v1/campaigns/${CAMP_ID}/apply`).send({ note: 'Interested' });
       expect(res.status).toBe(201);
       expect(mockCollabCreate).toHaveBeenCalled();
+    });
+
+    it('should block apply when profile is incomplete', async () => {
+      mockVerifyJwt.mockImplementation((req, res, next) => {
+        req.user = { _id: 'inf_id', role: 'influencer', profileComplete: false };
+        next();
+      });
+      const app = buildApp();
+      const res = await request(app).post(`/api/v1/campaigns/${CAMP_ID}/apply`).send({ note: 'Interested' });
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/complete your profile/i);
     });
 
     it('should return 400 if note is missing', async () => {

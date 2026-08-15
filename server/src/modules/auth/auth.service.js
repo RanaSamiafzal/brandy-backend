@@ -129,6 +129,116 @@ const login = async (email, password) => {
     }
 };
 
+const googleProfileEmail = (profile) =>
+    (profile?.emails?.[0]?.value || "").toLowerCase().trim();
+
+const googleProfilePhoto = (profile) => profile?.photos?.[0]?.value || "";
+
+/**
+ * Patch a user without document.save().
+ * Email/password accounts often stored `platforms: []`. Mongoose nested
+ * `platforms.youtube` defaults then make save() throw:
+ *   Cannot create field 'youtube' in element {platforms: []}
+ */
+const patchExistingGoogleUser = async (user, { googleId, profilePic, reactivate = false }) => {
+    const $set = { googleId };
+    if (profilePic && !user.profilePic) $set.profilePic = profilePic;
+    if (!user.isVerified) $set.isVerified = true;
+    if (reactivate) $set.isDeactivated = false;
+
+    await User.updateOne({ _id: user._id }, { $set });
+    await User.updateOne(
+        { _id: user._id, platforms: { $type: "array" } },
+        { $set: { platforms: {} } }
+    );
+
+    Object.assign(user, $set);
+};
+
+/**
+ * Login or register with a Google OAuth profile.
+ *
+ * intent=login  → existing googleId/email only (never create, never change role).
+ * intent=signup → create a new account with the chosen brand|influencer role.
+ * Existing accounts always keep the role they signed up with.
+ */
+const loginWithGoogle = async ({ profile, role = "brand", intent = "login" }) => {
+    const googleId = profile?.id;
+    const email = googleProfileEmail(profile);
+    const fullname = (profile?.displayName || "").trim() || "Google User";
+    const safeRole = role === "influencer" ? "influencer" : "brand";
+
+    if (!googleId || !email) {
+        throw new ApiError(validationStatus.badRequest, "Google did not return an email address");
+    }
+
+    let user = await User.findOne({ googleId });
+    let isNew = false;
+
+    if (!user) {
+        user = await User.findOne({ email });
+        if (user) {
+            await patchExistingGoogleUser(user, {
+                googleId,
+                profilePic: googleProfilePhoto(profile),
+            });
+        }
+    }
+
+    if (!user) {
+        if (intent !== "signup") {
+            throw new ApiError(
+                validationStatus.notFound,
+                "No Brandly account for this Google email. Sign up first and choose Brand or Creator."
+            );
+        }
+
+        user = await User.create({
+            fullname,
+            email,
+            googleId,
+            isGoogleUser: true,
+            isVerified: true,
+            password: crypto.randomBytes(32).toString("hex"),
+            role: safeRole,
+            ...(googleProfilePhoto(profile) ? { profilePic: googleProfilePhoto(profile) } : {}),
+        });
+        isNew = true;
+
+        try {
+            if (safeRole === "brand") {
+                await Brand.create({
+                    user: user._id,
+                    brandname: fullname || "My Brand",
+                    budgetRange: { min: 0, max: 0 },
+                });
+            } else {
+                const handleBase = fullname.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || "creator";
+                await Influencer.create({
+                    user: user._id,
+                    username: `${handleBase}${user._id.toString().slice(-4)}`,
+                    about: `Hi, I'm ${fullname}`,
+                });
+            }
+        } catch (err) {
+            console.error("Error creating role profile on Google registration:", err);
+        }
+    }
+
+    if (user.isBlocked) {
+        throw new ApiError(403, "Account has been blocked");
+    }
+
+    if (user.isDeactivated) {
+        await patchExistingGoogleUser(user, { googleId: user.googleId || googleId, reactivate: true });
+    }
+
+    const tokens = await generateAccessAndRefreshTokens(user._id);
+    const loggedInUser = await User.findById(user._id).select("-password -refreshTokens");
+    logger.info(`Google login successful for user: ${email}`);
+    return { user: loggedInUser, isNew, ...tokens };
+};
+
 /**
  * Logout user
  */
@@ -602,6 +712,7 @@ const handleFacebookCallback = async (code) => {
 export const authService = {
     register,
     login,
+    loginWithGoogle,
     logout,
     refreshAccessToken,
     forgotPassword,

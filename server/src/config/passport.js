@@ -1,12 +1,9 @@
 import passport from "passport";
 import GoogleOAuth from "passport-google-oauth20";
-import User from "../modules/user/user.model.js";
-import Brand from "../modules/brand/brand.model.js";
 
 const { Strategy: GoogleStrategy } = GoogleOAuth;
 
-// ── Strategy 1: Google Sign-In / Sign-Up ─────────────────────────────────────
-// Used for: /auth/google login flow
+// Login / signup only. Profile upsert lives in authService.loginWithGoogle.
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(
     "google",
@@ -18,26 +15,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
-          let user = await User.findOne({ googleId: profile.id });
-
-          if (!user) {
-            user = await User.create({
-              fullname: profile.displayName,
-              email: profile.emails?.[0]?.value,
-              googleId: profile.id,
-              isGoogleUser: true,
-              password: "google-auth-user",
-              role: "brand",
-            });
-
-            await Brand.create({
-              user: user._id,
-              brandname: user.fullname || "My Brand",
-              budgetRange: { min: 0, max: 0 },
-            });
-          }
-
-          return done(null, user);
+          return done(null, profile);
         } catch (error) {
           return done(error, null);
         }

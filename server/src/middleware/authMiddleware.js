@@ -3,6 +3,7 @@ import { AsyncHandler } from "../utils/Asynchandler.js";
 import { validationStatus } from "../utils/ValidationStatusCode.js";
 import jwt from 'jsonwebtoken'
 import User from './../modules/user/user.model.js';
+import { USER_SAFE_SELECT } from '../utils/sanitizeSecrets.js';
 
 export const verifyJwt=AsyncHandler(async(req,res,next)=>{
     try {
@@ -14,7 +15,7 @@ export const verifyJwt=AsyncHandler(async(req,res,next)=>{
 
     // DECODE the token to verify to verify if from secret key 
     const decodeToken=jwt.verify(token,process.env.ACCESS_TOKEN_SECRET)
- const user=await User.findById(decodeToken?._id).select('-password -refreshToken')
+ const user=await User.findById(decodeToken?._id).select(USER_SAFE_SELECT)
  if(!user){
     throw new ApiError(validationStatus.unauthorized,'invalid access token')
  }

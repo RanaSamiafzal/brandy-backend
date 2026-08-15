@@ -10,7 +10,6 @@ import { upload } from "../../middleware/multerMiddleware.js";
 const router = Router();
 
 router.get("/public-list", brandController.getPublicBrandList);
-router.get("/debug-in", brandController.getBrandInfluencers);
 router.get("/:brandId/public", brandController.getBrandPublicProfile);
 
 router.use(verifyJwt, roleMiddleware(["brand"]));

@@ -351,6 +351,87 @@ describe('auth.service.js', () => {
   });
 
   // ── getFacebookAuthUrl ─────────────────────────────────────────────
+  describe('loginWithGoogle', () => {
+    const googleProfile = {
+      id: 'google-123',
+      displayName: 'Ada Lovelace',
+      emails: [{ value: USER_EMAIL }],
+      photos: [{ value: 'https://example.com/ada.jpg' }],
+    };
+
+    it('should reject profiles without email', async () => {
+      await expect(authService.loginWithGoogle({ profile: { id: 'x' } }))
+        .rejects.toThrow('Google did not return an email address');
+    });
+
+    it('should log in an existing Google user', async () => {
+      const user = makeUser({ googleId: 'google-123' });
+      mockUserFindOne.mockReturnValueOnce(queryChain(user));
+      mockUserFindById.mockReturnValue(queryChain(user));
+
+      const result = await authService.loginWithGoogle({ profile: googleProfile, role: 'brand' });
+      expect(result.accessToken).toBe('access_token');
+      expect(mockUserCreate).not.toHaveBeenCalled();
+    });
+
+    it('should link Google to an existing email account', async () => {
+      const user = makeUser();
+      mockUserFindOne
+        .mockReturnValueOnce(queryChain(null))
+        .mockReturnValueOnce(queryChain(user));
+      mockUserFindById.mockReturnValue(queryChain(user));
+
+      await authService.loginWithGoogle({ profile: googleProfile, role: 'influencer' });
+      expect(user.googleId).toBe('google-123');
+      expect(mockUserCreate).not.toHaveBeenCalled();
+      expect(mockUserUpdateOne).toHaveBeenCalled();
+      expect(user.save).not.toHaveBeenCalled();
+    });
+
+    it('should create a brand user and profile for a new Google account', async () => {
+      const created = makeUser({ googleId: 'google-123', isGoogleUser: true, isVerified: true });
+      mockUserFindOne.mockReturnValue(queryChain(null));
+      mockUserCreate.mockResolvedValue(created);
+      mockUserFindById.mockReturnValue(queryChain(created));
+
+      const result = await authService.loginWithGoogle({
+        profile: googleProfile,
+        role: 'brand',
+        intent: 'signup',
+      });
+      expect(mockUserCreate).toHaveBeenCalled();
+      expect(mockBrandCreate).toHaveBeenCalled();
+      expect(result.isNew).toBe(true);
+    });
+
+    it('should create an influencer profile when role is influencer', async () => {
+      const created = makeUser({ role: 'influencer', googleId: 'google-123' });
+      mockUserFindOne.mockReturnValue(queryChain(null));
+      mockUserCreate.mockResolvedValue(created);
+      mockUserFindById.mockReturnValue(queryChain(created));
+
+      await authService.loginWithGoogle({
+        profile: googleProfile,
+        role: 'influencer',
+        intent: 'signup',
+      });
+      expect(mockInfluencerCreate).toHaveBeenCalled();
+    });
+
+    it('should reject blocked users', async () => {
+      mockUserFindOne.mockReturnValueOnce(queryChain(makeUser({ googleId: 'google-123', isBlocked: true })));
+      await expect(authService.loginWithGoogle({ profile: googleProfile }))
+        .rejects.toThrow('Account has been blocked');
+    });
+
+    it('should not create an account on login when Google email is unknown', async () => {
+      mockUserFindOne.mockReturnValue(queryChain(null));
+      await expect(authService.loginWithGoogle({ profile: googleProfile, intent: 'login' }))
+        .rejects.toThrow(/Sign up first/i);
+      expect(mockUserCreate).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getFacebookAuthUrl', () => {
     it('should return a valid Facebook OAuth URL', () => {
       const url = authService.getFacebookAuthUrl();

@@ -20,6 +20,16 @@ const updateProfileSchema = Joi.object({
     resume: Joi.any().allow(''),
     recentWork: Joi.any(),
     location: Joi.string().trim().allow(''),
+    geo: Joi.alternatives().try(
+        Joi.string().allow(''),
+        Joi.object({
+            lat: Joi.number().min(-90).max(90),
+            lng: Joi.number().min(-180).max(180),
+            city: Joi.string().allow(''),
+            country: Joi.string().allow(''),
+            formatted: Joi.string().allow(''),
+        })
+    ),
     isAvailable: Joi.boolean(),
     socialMedia: Joi.any(),
     socialMediaUpdate: Joi.any(),

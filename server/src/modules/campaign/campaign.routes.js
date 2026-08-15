@@ -3,6 +3,7 @@ import { campaignController } from "./campaign.controller.js";
 import { campaignValidation } from "./campaign.validation.js";
 import { verifyJwt } from "../../middleware/authMiddleware.js";
 import { roleMiddleware } from "../../middleware/roleMiddleware.js";
+import { requireProfileComplete } from "../../middleware/profileGate.js";
 import { upload } from "../../middleware/multerMiddleware.js";
 import { validate } from "../../middleware/validationMiddleware.js";
 
@@ -51,6 +52,7 @@ router.patch(
 router.post(
     "/:campaignId/apply",
     roleMiddleware(["influencer"]),
+    requireProfileComplete,
     upload.fields([{ name: "portfolio", maxCount: 1 }]),
     validate(campaignValidation.applyToCampaignSchema),
     campaignController.applyToCampaign

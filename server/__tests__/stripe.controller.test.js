@@ -11,7 +11,8 @@ const mockVerifyJwt = jest.fn((req, res, next) => {
     fullname: 'Test Brand',
     stripeCustomerId: 'cus_test',
     stripeAccountId: null,
-    stripeOnboardingComplete: false
+    stripeOnboardingComplete: false,
+    profileComplete: true,
   };
   next();
 });
@@ -111,7 +112,8 @@ const defaultBrandUser = {
   fullname: 'Test Brand',
   stripeCustomerId: 'cus_test',
   stripeAccountId: null,
-  stripeOnboardingComplete: false
+  stripeOnboardingComplete: false,
+  profileComplete: true,
 };
 
 const defaultInfluencerUser = {
@@ -364,6 +366,20 @@ describe('stripe.controller.js (Integration)', () => {
       expect(res.body.data.clientSecret).toBe('pi_secret_123');
       expect(res.body.data.paymentIntentId).toBe('pi_123');
       expect(res.body.message).toBe('Escrow PaymentIntent created');
+    });
+
+    it('should return 403 when profile is incomplete', async () => {
+      mockVerifyJwt.mockImplementation((req, res, next) => {
+        req.user = { _id: 'test_brand_id', role: 'brand', profileComplete: false };
+        next();
+      });
+
+      const res = await request(buildApp())
+        .post('/api/v1/payment/escrow/fund')
+        .send({ collaborationId: 'collab_1' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/complete your profile/i);
     });
 
     it('should return 400 when service throws ApiError (e.g. already funded)', async () => {

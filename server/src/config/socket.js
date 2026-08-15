@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../modules/user/user.model.js";
 import { socketManager } from "./socketManager.js";
+import { canJoinRoom, getAuthorizedConversation, getAuthorizedMessage } from "./socketAcl.js";
 
 const initializeSocket = (httpServer, app) => {
     const allowedSocketOrigins = [
@@ -87,68 +88,124 @@ const initializeSocket = (httpServer, app) => {
             socket.emit("connected");
         });
 
-        socket.on("join chat", (room) => {
-            socket.join(room);
-            console.log("User Joined Room: " + room);
+        socket.on("join chat", async (room) => {
+            try {
+                const allowed = await canJoinRoom(socket.userId, room);
+                if (!allowed) {
+                    socket.emit("socket_error", { event: "join chat", message: "Not authorized for this room" });
+                    return;
+                }
+                socket.join(String(room));
+            } catch (error) {
+                console.error("Error in join chat:", error);
+            }
         });
 
-        socket.on("typing", (room) => socket.in(room).emit("typing", room));
-        socket.on("stop typing", (room) => socket.in(room).emit("stop typing", room));
+        socket.on("typing", async (room) => {
+            if (!(await canJoinRoom(socket.userId, room))) return;
+            socket.in(String(room)).emit("typing", room);
+        });
+        socket.on("stop typing", async (room) => {
+            if (!(await canJoinRoom(socket.userId, room))) return;
+            socket.in(String(room)).emit("stop typing", room);
+        });
 
-        socket.on("new message", (newMessageRecieved) => {
-            const chat = newMessageRecieved.conversationId;
-            if (!chat) return console.log("chat not defined for message");
+        socket.on("new message", async (newMessageRecieved) => {
+            try {
+                const conversationId = newMessageRecieved?.conversationId?._id || newMessageRecieved?.conversationId;
+                const conv = await getAuthorizedConversation(socket.userId, conversationId);
+                if (!conv) {
+                    socket.emit("socket_error", { event: "new message", message: "Not authorized" });
+                    return;
+                }
 
-            // 1. Emit to the conversation room (for the active chat window)
-            socket.in(chat).emit("message recieved", newMessageRecieved);
+                const senderId = newMessageRecieved?.sender?._id || newMessageRecieved?.sender;
+                if (senderId && String(senderId) !== String(socket.userId)) {
+                    socket.emit("socket_error", { event: "new message", message: "Sender mismatch" });
+                    return;
+                }
 
-            // 2. Emit to individual participant rooms (for sidebar updates)
-            if (newMessageRecieved.participants) {
-                newMessageRecieved.participants.forEach(participantId => {
-                    const pId = typeof participantId === 'object' ? participantId._id : participantId;
-                    if (String(pId) !== String(newMessageRecieved.sender._id)) {
-                        socket.in(String(pId)).emit("message recieved", newMessageRecieved);
+                const safePayload = {
+                    ...newMessageRecieved,
+                    conversationId,
+                    participants: conv.participants,
+                };
+
+                socket.in(String(conversationId)).emit("message recieved", safePayload);
+                conv.participants.forEach((participantId) => {
+                    if (String(participantId) !== String(socket.userId)) {
+                        socket.in(String(participantId)).emit("message recieved", safePayload);
                     }
                 });
+            } catch (error) {
+                console.error("Error in new message:", error);
             }
         });
 
-        socket.on("message updated", (updatedMessage) => {
-            const chat = updatedMessage.conversationId;
-            if (!chat) return;
+        socket.on("message updated", async (updatedMessage) => {
+            try {
+                const conversationId = updatedMessage?.conversationId?._id || updatedMessage?.conversationId;
+                const conv = await getAuthorizedConversation(socket.userId, conversationId);
+                if (!conv) return;
 
-            // Broadcast the update to the conversation room
-            socket.in(chat).emit("message updated", updatedMessage);
-            
-            // Also notify individual participant rooms for sidebars/notifications if needed
-            if (updatedMessage.participants) {
-                updatedMessage.participants.forEach(participantId => {
-                    const pId = typeof participantId === 'object' ? participantId._id : participantId;
-                    if (String(pId) !== String(updatedMessage.sender?._id || updatedMessage.sender)) {
-                        socket.in(String(pId)).emit("message updated", updatedMessage);
+                const safePayload = {
+                    ...updatedMessage,
+                    conversationId,
+                    participants: conv.participants,
+                };
+                socket.in(String(conversationId)).emit("message updated", safePayload);
+                conv.participants.forEach((participantId) => {
+                    if (String(participantId) !== String(socket.userId)) {
+                        socket.in(String(participantId)).emit("message updated", safePayload);
                     }
                 });
+            } catch (error) {
+                console.error("Error in message updated:", error);
             }
         });
 
-        socket.on("message deleted", ({ messageId, conversationId, participants }) => {
-            if (!conversationId) return;
+        socket.on("message deleted", async ({ messageId, conversationId }) => {
+            try {
+                const conv = await getAuthorizedConversation(socket.userId, conversationId);
+                if (!conv) return;
+                if (messageId) {
+                    const msg = await getAuthorizedMessage(socket.userId, messageId, conversationId);
+                    if (!msg) return;
+                }
 
-            // Broadcast deletion to the conversation room
-            socket.in(conversationId).emit("message deleted", { messageId, conversationId });
-
-            // Notify participants individual rooms
-            if (participants) {
-                participants.forEach(participantId => {
-                    const pId = typeof participantId === 'object' ? participantId._id : participantId;
-                    socket.in(pId).emit("message deleted", { messageId, conversationId });
+                socket.in(String(conversationId)).emit("message deleted", { messageId, conversationId });
+                conv.participants.forEach((participantId) => {
+                    socket.in(String(participantId)).emit("message deleted", { messageId, conversationId });
                 });
+            } catch (error) {
+                console.error("Error in message deleted:", error);
             }
         });
 
-        socket.on("mark as read", ({ conversationId, userId }) => {
-            if (!conversationId) return;
-            socket.in(conversationId).emit("messages read", { conversationId, readBy: userId });
+        socket.on("mark as read", async ({ conversationId, userId }) => {
+            try {
+                const conv = await getAuthorizedConversation(socket.userId, conversationId);
+                if (!conv) return;
+                socket.in(String(conversationId)).emit("messages read", {
+                    conversationId,
+                    readBy: socket.userId,
+                });
+            } catch (error) {
+                console.error("Error in mark as read:", error);
+            }
+        });
+
+        socket.on("presence_ping", async () => {
+            const userId = socket.userId;
+            if (!userId) return;
+            try {
+                const user = await User.findById(userId).select("manualOffline");
+                if (user && !user.manualOffline) {
+                    await User.findByIdAndUpdate(userId, { lastActive: new Date() });
+                }
+            } catch (error) {
+                console.error("Error in presence_ping:", error);
+            }
         });
 
         socket.on("disconnect", async () => {

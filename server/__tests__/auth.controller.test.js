@@ -44,7 +44,8 @@ jest.unstable_mockModule('../src/modules/auth/auth.service.js', () => ({
     sendEmailVerificationOTP: mockSendOTP,
     verifyEmailVerificationOTP: mockVerifyOTP,
     getFacebookAuthUrl: mockGetFacebookAuthUrl,
-    handleFacebookCallback: mockHandleFacebookCallback
+    handleFacebookCallback: mockHandleFacebookCallback,
+    loginWithGoogle: jest.fn(),
   }
 }));
 
@@ -87,6 +88,11 @@ describe('auth.controller.js', () => {
   describe('POST /register', () => {
     it('should register a new user', async () => {
       mockRegister.mockResolvedValue({ _id: USER_ID, email: 'new@test.com', role: 'brand' });
+      mockLogin.mockResolvedValue({
+        user: { _id: USER_ID, email: 'new@test.com', role: 'brand' },
+        accessToken: 'at',
+        refreshToken: 'rt'
+      });
       const app = buildApp();
       const res = await request(app).post('/api/v1/users/register').send({
         fullname: 'New User', email: 'new@test.com', password: 'pass123', role: 'brand'
@@ -255,6 +261,14 @@ describe('auth.controller.js', () => {
       const app = buildApp();
       const res = await request(app).post('/api/v1/users/logout');
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe('GET /google/status', () => {
+    it('returns whether Google OAuth is configured', async () => {
+      const res = await request(buildApp()).get('/api/v1/users/google/status');
+      expect(res.status).toBe(200);
+      expect(typeof res.body.data.configured).toBe('boolean');
     });
   });
 });
