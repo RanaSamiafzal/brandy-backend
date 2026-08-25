@@ -7,13 +7,16 @@ import { roleMiddleware } from "../../middleware/roleMiddleware.js";
 import { upload } from "../../middleware/multerMiddleware.js";
 
 
+import { verifyAuthOrApiKey } from "../../middleware/apiKeyMiddleware.js";
+
 const router = Router();
 
-router.get("/public-list", brandController.getPublicBrandList);
-router.get("/debug-in", brandController.getBrandInfluencers);
-router.get("/:brandId/public", brandController.getBrandPublicProfile);
+router.get("/public-list", verifyAuthOrApiKey('brands:read'), brandController.getPublicBrandList);
+router.get("/debug-in", verifyAuthOrApiKey('brands:read'), brandController.getBrandInfluencers);
+router.get("/:brandId/public", verifyAuthOrApiKey('brands:read'), brandController.getBrandPublicProfile);
 
 router.use(verifyJwt, roleMiddleware(["brand"]));
+
 
 router.get("/profile", brandController.getBrandProfile);
 

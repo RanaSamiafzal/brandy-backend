@@ -47,4 +47,10 @@ router.get("/youtube/callback", (req, res, next) => {
 router.get("/facebook", authController.facebookConnect);
 router.get("/facebook/callback", authController.facebookCallback);
 
+// API Key Management Routes
+router.post("/api-keys", verifyJwt, authController.createApiKey);
+router.get("/api-keys", verifyJwt, authController.listApiKeys);
+router.delete("/api-keys/:keyId", verifyJwt, authController.revokeApiKey);
+
 export default router;
+

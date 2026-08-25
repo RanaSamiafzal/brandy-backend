@@ -6,17 +6,18 @@ import { verifyJwt } from "../../middleware/authMiddleware.js";
 import { roleMiddleware } from "../../middleware/roleMiddleware.js";
 import { upload } from "../../middleware/multerMiddleware.js";
 
+import { verifyAuthOrApiKey } from "../../middleware/apiKeyMiddleware.js";
+
 const router = Router();
 
-router.use(verifyJwt);
+// Protected dashboard and profile for influencers only (requires JWT)
+router.get("/dashboard", verifyJwt, roleMiddleware(["influencer"]), influencerController.getInfluencerDashboard);
+router.get("/profile", verifyJwt, roleMiddleware(["influencer"]), influencerController.getInfluencerProfile);
 
-// Protected dashboard and profile for influencers only
-router.get("/dashboard", roleMiddleware(["influencer"]), influencerController.getInfluencerDashboard);
-router.get("/profile", roleMiddleware(["influencer"]), influencerController.getInfluencerProfile);
+// Public / Agent accessible read routes
+router.get("/search", verifyAuthOrApiKey('influencers:read'), validate(influencerValidation.searchQuerySchema, 'query'), influencerController.getAllInfluencer);
+router.get("/:influencerId", verifyAuthOrApiKey('influencers:read'), influencerController.getInfluencer);
 
-// Dynamic routes must be registered last
-router.get("/search", validate(influencerValidation.searchQuerySchema, 'query'), influencerController.getAllInfluencer);
-router.get("/:influencerId", influencerController.getInfluencer);
 
 router.patch(
     "/update-profile",

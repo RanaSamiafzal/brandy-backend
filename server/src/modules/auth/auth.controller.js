@@ -1,5 +1,7 @@
 import { authService } from "./auth.service.js";
+import ApiKey from "./apiKey.model.js";
 import { AsyncHandler } from "../../utils/Asynchandler.js";
+
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { validationStatus } from "../../utils/ValidationStatusCode.js";
@@ -236,4 +238,49 @@ export const authController = {
     verifyOTP,
     facebookConnect,
     facebookCallback,
+    createApiKey: AsyncHandler(async (req, res) => {
+        const { name, scopes } = req.body;
+        if (!name) throw new ApiError(validationStatus.badRequest, "Key name is required");
+        const { rawKey, prefix, keyHash } = ApiKey.generateKey();
+        const apiKeyRecord = await ApiKey.create({
+            name,
+            keyHash,
+            prefix,
+            owner: req.user._id,
+            scopes: scopes || ['aimatch:read', 'campaigns:read', 'influencers:read', 'brands:read']
+        });
+        return res.status(validationStatus.created).json(
+            new ApiResponse(
+                validationStatus.created,
+                {
+                    apiKey: rawKey,
+                    id: apiKeyRecord._id,
+                    name: apiKeyRecord.name,
+                    prefix: apiKeyRecord.prefix,
+                    scopes: apiKeyRecord.scopes,
+                    createdAt: apiKeyRecord.createdAt
+                },
+                "API Key generated successfully. Save this raw key; it will not be shown again."
+            )
+        );
+    }),
+    listApiKeys: AsyncHandler(async (req, res) => {
+        const keys = await ApiKey.find({ owner: req.user._id, isActive: true })
+            .select('-keyHash')
+            .sort({ createdAt: -1 });
+        return res.status(validationStatus.ok).json(
+            new ApiResponse(validationStatus.ok, keys, "API Keys retrieved successfully")
+        );
+    }),
+    revokeApiKey: AsyncHandler(async (req, res) => {
+        const { keyId } = req.params;
+        const key = await ApiKey.findOne({ _id: keyId, owner: req.user._id });
+        if (!key) throw new ApiError(validationStatus.notFound, "API Key not found");
+        key.isActive = false;
+        await key.save();
+        return res.status(validationStatus.ok).json(
+            new ApiResponse(validationStatus.ok, {}, "API Key revoked successfully")
+        );
+    })
 };
+

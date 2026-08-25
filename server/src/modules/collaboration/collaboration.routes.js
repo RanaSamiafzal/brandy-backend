@@ -3,10 +3,11 @@ import { collaborationController } from "./collaboration.controller.js";
 import { collaborationValidation } from "./collaboration.validation.js";
 import { validate } from "../../middleware/validationMiddleware.js";
 import { verifyJwt } from "../../middleware/authMiddleware.js";
+import { verifyAuthOrApiKey } from "../../middleware/apiKeyMiddleware.js";
 
 const router = Router();
 
-router.use(verifyJwt);
+router.use(verifyAuthOrApiKey());
 
 router.route("/request")
     .post(validate(collaborationValidation.sendRequestSchema), collaborationController.sendCollaborationRequest)

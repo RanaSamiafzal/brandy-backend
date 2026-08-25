@@ -75,10 +75,14 @@ export const startWorkers = async () => {
     });
 
     // Schedule repeatable jobs
-    const analyticsQueue = getQueue(QUEUES.ANALYTICS);
-    await analyticsQueue.add('prune_ai_memory', {}, {
-        repeat: { pattern: '0 0 * * *' } // Every night at midnight
-    });
+    try {
+        const analyticsQueue = getQueue(QUEUES.ANALYTICS);
+        await analyticsQueue.add('prune_ai_memory', {}, {
+            repeat: { pattern: '0 0 * * *' } // Every night at midnight
+        });
+    } catch (err) {
+        logger.warn(`⚠️ Could not schedule repeatable queue jobs: ${err.message}`);
+    }
 
     logger.info('✅ All Workers Started.');
 };
