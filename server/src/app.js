@@ -183,7 +183,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 // Apply rate limiters to specific paths
 app.use('/api/v1/auth', authLimiter);
