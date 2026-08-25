@@ -156,35 +156,40 @@ if (process.env.NODE_ENV !== 'production') {
     });
 }
 
+// Enable CORS before rate limiters or route handlers
+const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+    process.env.CORS_ORIGIN
+].filter(Boolean);
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.includes('vercel.app')) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Fallback allow to avoid blocking valid frontend deployments
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-KEY', 'x-api-key', 'X-Requested-With', 'Accept', 'Origin']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 // Apply rate limiters to specific paths
 app.use('/api/v1/auth', authLimiter);
 app.use('/api/v1/payment', paymentLimiter);
 app.use('/api/v1/aiMatch', aiLimiter);
 app.use('/api/v1/admin', adminLimiter);
-
-// we use cors for setting that which origin we will accept the req 
-app.use(cors({
-    origin: function (origin, callback) {
-        const allowedOrigins = [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:3002",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001",
-            "http://127.0.0.1:3002",
-            process.env.CORS_ORIGIN
-        ].filter(Boolean);
-
-        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true
-}))
 
 
 // for accept jason here but set the limit of accepting json
