@@ -2,7 +2,7 @@
 
 This is the backend server for the Brandy project, built with Node.js, Express, and Mongoose.
 
-## 🚀 Getting Started
+## Getting Started
 
 Follow these steps to set up the project on your local machine.
 
@@ -46,12 +46,19 @@ Follow these steps to set up the project on your local machine.
   npm start
   ```
 
-
-  
-
 The server will be running on `http://localhost:8000` (or the port specified in your `.env`).
 
+### 4. Botpress MCP (tools)
 
+Brandly exposes Streamable HTTP MCP at **`/mcp`** for Botpress agent tool calling.
 
+See **[MCP.md](./MCP.md)** for:
 
-// for remote cerver access : terminal   ngrok http 8000  
+- Creating an API key
+- Connecting Custom MCP in Botpress (HTTP URL + API key)
+- ngrok / Render public URL steps
+- Tool list and smoke tests
+
+Quick check: `GET http://localhost:8000/mcp/health`
+
+For remote access while developing: `ngrok http 8000`

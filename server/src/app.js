@@ -25,6 +25,7 @@ import rateLimit from 'express-rate-limit';
 import { stripeController } from './modules/payment/stripe.controller.js'
 import compression from 'compression';
 import { errorMiddleware } from './middleware/errorMiddleware.js';
+import { mountMcpRoutes } from './mcp/server.js';
 // Cache imports available if needed
 // import cacheService from './utils/cacheService.js';
 // import { getOrSetCache } from './utils/cacheHelpers.js';
@@ -179,7 +180,19 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-KEY', 'x-api-key', 'X-Requested-With', 'Accept', 'Origin']
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-API-KEY',
+        'x-api-key',
+        'X-Requested-With',
+        'Accept',
+        'Origin',
+        'mcp-session-id',
+        'MCP-Protocol-Version',
+        'Last-Event-ID',
+    ],
+    exposedHeaders: ['mcp-session-id', 'MCP-Protocol-Version'],
 };
 
 app.use(cors(corsOptions));
@@ -200,8 +213,13 @@ app.use(express.urlencoded({
     limit: '16kb'
 })) // use  extended for accepting nested object
 
-// Data sanitization against NoSQL query injection (applied after body parsing)
-app.use(mongoSanitize());
+// Skip NoSQL sanitization for MCP JSON-RPC bodies (protocol must remain intact).
+app.use((req, res, next) => {
+    if (req.path === '/mcp' || req.path.startsWith('/mcp/')) {
+        return next();
+    }
+    return mongoSanitize()(req, res, next);
+});
 
 app.use(express.static('public', {
     dotfiles: 'ignore', // Prevent exposure of sensitive dotfiles (.env, etc.)
@@ -210,6 +228,9 @@ app.use(express.static('public', {
 
 app.use(cookieParser())
 app.use(passport.initialize());
+
+// Botpress / MCP Streamable HTTP endpoint (API key required on /mcp)
+mountMcpRoutes(app);
 
 app.get("/", (req, res) => {
     res.status(200).json({
