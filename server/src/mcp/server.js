@@ -1,10 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { resolveApiKeyFromRequest } from './auth.js';
 import { registerBrandlyTools } from './tools.js';
 
+/** @type {Map<string, { transport: StreamableHTTPServerTransport, server: McpServer }>} */
+const sessions = new Map();
+
 /**
- * Build a fresh MCP server for one request (stateless), bound to the agent context.
+ * Build a fresh MCP server bound to the agent context.
  * @param {{ user: object, scopes: string[] }} agent
  */
 export function createBrandlyMcpServer(agent) {
@@ -39,8 +44,7 @@ export async function mcpAuthMiddleware(req, res, next) {
 }
 
 /**
- * Stateless Streamable HTTP handler for Botpress / MCP clients.
- * Creates a transport + server per request; uses JSON responses (no long-lived SSE).
+ * Streamable HTTP handler with JSON responses + session IDs (Botpress-friendly).
  */
 export async function handleMcpRequest(req, res) {
     const agent = req.mcpAgent;
@@ -52,15 +56,43 @@ export async function handleMcpRequest(req, res) {
         });
     }
 
-    const server = createBrandlyMcpServer(agent);
-    const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-    });
-
     try {
-        await server.connect(transport);
-        await transport.handleRequest(req, res, req.body);
+        const sessionId = req.headers['mcp-session-id'];
+
+        if (sessionId && sessions.has(sessionId)) {
+            const { transport } = sessions.get(sessionId);
+            await transport.handleRequest(req, res, req.body);
+            return;
+        }
+
+        if (!sessionId && req.body && isInitializeRequest(req.body)) {
+            const server = createBrandlyMcpServer(agent);
+            const transport = new StreamableHTTPServerTransport({
+                sessionIdGenerator: () => randomUUID(),
+                enableJsonResponse: true,
+                onsessioninitialized: (id) => {
+                    sessions.set(id, { transport, server });
+                },
+            });
+
+            transport.onclose = () => {
+                const id = transport.sessionId;
+                if (id) sessions.delete(id);
+            };
+
+            await server.connect(transport);
+            await transport.handleRequest(req, res, req.body);
+            return;
+        }
+
+        res.status(400).json({
+            jsonrpc: '2.0',
+            error: {
+                code: -32000,
+                message: 'Bad Request: No valid session ID. Call initialize first.',
+            },
+            id: null,
+        });
     } catch (error) {
         console.error('[MCP] Error handling request:', error);
         if (!res.headersSent) {
@@ -73,12 +105,18 @@ export async function handleMcpRequest(req, res) {
                 id: null,
             });
         }
-    } finally {
-        res.on('close', () => {
-            transport.close().catch(() => {});
-            server.close().catch(() => {});
-        });
     }
+}
+
+function mcpMethodNotAllowed(_req, res) {
+    res.status(405).json({
+        jsonrpc: '2.0',
+        error: {
+            code: -32000,
+            message: 'Method not allowed. Use POST for Streamable HTTP JSON MCP.',
+        },
+        id: null,
+    });
 }
 
 /**
@@ -86,15 +124,6 @@ export async function handleMcpRequest(req, res) {
  * @param {import('express').Express} app
  */
 export function mountMcpRoutes(app) {
-    const methods = ['post', 'get', 'delete'];
-
-    for (const method of methods) {
-        app[method]('/mcp', mcpAuthMiddleware, async (req, res) => {
-            await handleMcpRequest(req, res);
-        });
-    }
-
-    // Lightweight discovery / health for humans (no auth)
     app.get('/mcp/health', (_req, res) => {
         res.status(200).json({
             success: true,
@@ -113,5 +142,21 @@ export function mountMcpRoutes(app) {
                 'ai_match_for_influencer',
             ],
         });
+    });
+
+    app.post('/mcp', mcpAuthMiddleware, async (req, res) => {
+        await handleMcpRequest(req, res);
+    });
+    // Avoid hanging SSE GET streams that break Botpress "Discover tools"
+    app.get('/mcp', mcpMethodNotAllowed);
+    app.delete('/mcp', mcpAuthMiddleware, async (req, res) => {
+        const sessionId = req.headers['mcp-session-id'];
+        if (sessionId && sessions.has(sessionId)) {
+            const { transport, server } = sessions.get(sessionId);
+            sessions.delete(sessionId);
+            await transport.close().catch(() => {});
+            await server.close().catch(() => {});
+        }
+        res.status(200).json({ jsonrpc: '2.0', result: {}, id: null });
     });
 }
